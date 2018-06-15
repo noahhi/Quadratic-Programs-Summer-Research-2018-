@@ -127,13 +127,13 @@ def glovers_linearization(quad, bounds="tight", constraints="original"):
 		else:
 			m.setObjective(sum(c[j]*x[j] + z[j] for j in range(n)), GRB.MAXIMIZE)
 	elif(constraints=="sub1"):
-		s = m.continuous_var_list(keys=n)
+		s = m.addVars(n)
 		for j in range(n):
 			tempsum = sum(C[i,j]*x[i] for i in range(n))
 			m.addConstr(s[j] >= U[j]*x[j] - tempsum + L[j]*(1-x[j]))
 		m.setObjective(sum(c[i]*x[i] + (U[i]*x[i]-s[i]) for i in range(n)), GRB.MAXIMIZE)
 	elif(constraints=="sub2"):
-		s = m.continuous_var_list(keys=n)
+		s = m.addVars(n)
 		for j in range(n):
 			tempsum = sum(C[i,j]*x[i] for i in range(n))
 			m.addConstr(s[j] >= -U[j]*x[j] + tempsum - L[j]*(1-x[j]))
@@ -156,9 +156,10 @@ def rlt1_linearization(quad):
 
 	#create model and add variables
 	m = Model(name='RLT-1_linearization')
-	x = m.continuous_var_list(n,name='binary_var', lb=0, ub=1) #named binary_var so can easily switch for debug
-	w = m.continuous_var_matrix(keys1=n, keys2=n)
-	y = m.continuous_var_matrix(keys1=n, keys2=n)
+	#default var type is continuous in gurobi
+	x = m.addVars(n,name='binary_var', lb=0, ub=1, vtype=GRB.CONTINUOUS) #named binary_var so can easily switch for debug
+	w = m.addVars(n,n)
+	y = m.addVars(n,n)
 
 	#add capacity constraint(s)
 	for k in range(quad.m):
@@ -168,7 +169,7 @@ def rlt1_linearization(quad):
 	for i in range(n):
 		for j in range(i+1,n):
 			#con 16
-			m.addConstr(w[i,j]==w[j,i], ctname='con16'+str(i)+str(j))
+			m.addConstr(w[i,j]==w[j,i], name='con16'+str(i)+str(j))
 
 	for k in range(quad.m):
 		for j in range(n):
@@ -186,7 +187,7 @@ def rlt1_linearization(quad):
 			#con 15 (y>=0 implied)
 			m.addConstr(y[i,j] <= 1-x[j])
 			#con 17
-			m.addConstr(y[i,j] == x[i]-w[i,j], ctname='con17'+str(i)+str(j))
+			m.addConstr(y[i,j] == x[i]-w[i,j], name='con17'+str(i)+str(j))
 
 	#add objective function
 	linear_values = sum(x[j]*c[j] for j in range(n))
@@ -211,6 +212,7 @@ def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 
 	#model with rlt1, solve continuous relax and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
+	m.setParam('OutputFlag',0)
 	results = solve_model(m, quad.n, dual=True)
 	duals16 = results.get("duals16")
 	duals17 = results.get("duals17")
@@ -242,7 +244,7 @@ def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 
 	#create model and add variables
 	m = Model(name='glovers_linearization_ext_'+bounds+'_'+constraints)
-	x = m.binary_var_list(n, name="binary_var")
+	x = m.addVars(n, name="binary_var", vtype=GRB.BINARY)
 
 	#add capacity constraint(s)
 	for k in range(quad.m):
@@ -265,48 +267,52 @@ def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 	elif(bounds=="tight"):
 		u_bound_m1 = Model(name='upper_bound_model1')
 		l_bound_m1 = Model(name='lower_bound_model1')
-		u_bound_x1 = u_bound_m1.continuous_var_list(n, ub=1)
-		l_bound_x1 = l_bound_m1.continuous_var_list(n, ub=1)
+		u_bound_m1.setParam('OutputFlag',0)
+		l_bound_m1.setParam('OutputFlag',0)
+		u_bound_x1 = u_bound_m1.addVars(n, ub=1)
+		l_bound_x1 = l_bound_m1.addVars(n, ub=1)
 		for k in range(quad.m):
-			u_bound_m1.addConstr(u_bound_m1.sum(u_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
-			l_bound_m1.addConstr(l_bound_m1.sum(l_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
+			u_bound_m1.addConstr(sum(u_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
+			l_bound_m1.addConstr(sum(l_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
 		u_bound_m2 = Model(name='upper_bound_model2')
 		l_bound_m2 = Model(name='lower_bound_model2')
-		u_bound_x2 = u_bound_m2.continuous_var_list(n, ub=1)
-		l_bound_x2 = l_bound_m2.continuous_var_list(n, ub=1)
+		u_bound_m2.setParam('OutputFlag',0)
+		l_bound_m2.setParam('OutputFlag',0)
+		u_bound_x2 = u_bound_m2.addVars(n, ub=1)
+		l_bound_x2 = l_bound_m2.addVars(n, ub=1)
 		for k in range(quad.m):
-			u_bound_m2.addConstr(u_bound_m2.sum(u_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
-			l_bound_m2.addConstr(l_bound_m2.sum(l_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
+			u_bound_m2.addConstr(sum(u_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
+			l_bound_m2.addConstr(sum(l_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
 
 		for j in range(n):
-			u_bound_m1.set_objective(sense="max", expr=u_bound_m1.sum(D[i,j]*u_bound_x1[i] for i in range(n) if i!=j))
-			l_bound_m1.set_objective(sense="min", expr=l_bound_m1.sum(D[i,j]*l_bound_x1[i] for i in range(n) if i!=j))
+			u_bound_m1.setObjective(sum(D[i,j]*u_bound_x1[i] for i in range(n) if i!=j), GRB.MAXIMIZE)
+			l_bound_m1.setObjective(sum(D[i,j]*l_bound_x1[i] for i in range(n) if i!=j), GRB.MINIMIZE)
 			u_con1 = u_bound_m1.addConstr(u_bound_x1[j]==1)
 			l_con1 = l_bound_m1.addConstr(l_bound_x1[j]==0)
-			u_bound_m1.solve()
-			l_bound_m1.solve()
-			u_bound_m1.remove_constraint(u_con1)
-			l_bound_m1.remove_constraint(l_con1)
-			U1[j] = u_bound_m1.objective_value
-			L1[j] = l_bound_m1.objective_value
+			u_bound_m1.optimize()
+			l_bound_m1.optimize()
+			u_bound_m1.remove(u_con1)
+			l_bound_m1.remove(l_con1)
+			U1[j] = u_bound_m1.objVal
+			L1[j] = l_bound_m1.objVal
 
-			u_bound_m2.set_objective(sense="max", expr=u_bound_m2.sum(E[i,j]*u_bound_x2[i] for i in range(n) if i!=j))
-			l_bound_m2.set_objective(sense="min", expr=l_bound_m2.sum(E[i,j]*l_bound_x2[i] for i in range(n) if i!=j))
+			u_bound_m2.setObjective(sum(E[i,j]*u_bound_x2[i] for i in range(n) if i!=j), GRB.MAXIMIZE)
+			l_bound_m2.setObjective(sum(E[i,j]*l_bound_x2[i] for i in range(n) if i!=j), GRB.MINIMIZE)
 			u_con2 = u_bound_m2.addConstr(u_bound_x2[j]==0)
 			l_con2 = l_bound_m2.addConstr(l_bound_x2[j]==1)
-			u_bound_m2.solve()
-			l_bound_m2.solve()
-			u_bound_m2.remove_constraint(u_con2)
-			l_bound_m2.remove_constraint(l_con2)
-			U2[j] = u_bound_m2.objective_value
-			L2[j] = l_bound_m2.objective_value
+			u_bound_m2.optimize()
+			l_bound_m2.optimize()
+			u_bound_m2.remove(u_con2)
+			l_bound_m2.remove(l_con2)
+			U2[j] = u_bound_m2.objVal
+			L2[j] = l_bound_m2.objVal
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
 
 	#add auxiliary constrains
 	if(constraints=="original"):
-		z1 = m.continuous_var_list(keys=n,lb=-GRB.INFINITY)
-		z2 = m.continuous_var_list(keys=n,lb=-GRB.INFINITY)
+		z1 = m.addVars(n,lb=-GRB.INFINITY)
+		z2 = m.addVars(n,lb=-GRB.INFINITY)
 		for j in range(n):
 			m.addConstr(z1[j] <= U1[j]*x[j])
 			m.addConstr(z2[j] <= U2[j]*(1-x[j]))
@@ -318,13 +324,13 @@ def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 		m.setObjective(sum(c[j]*x[j] + z1[j] + z2[j] for j in range(n)), GRB.MAXIMIZE)
 	#substituted constraints not yet implemented here
 	# elif(constraints=="sub1"):
-		# s = m.continuous_var_list(keys=n)
+		# s = m.addVars(n)
 		# for j in range(n):
 			# tempsum = sum(C[i,j]*x[i] for i in range(n))
 			# m.addConstr(s[j] >= U[j]*x[j] - tempsum + L[j]*(1-x[j]))
 		# m.setObjective(sum(c[i]*x[i] + (U[i]*x[i]-s[i]) for i in range(n)), GRB.MAXIMIZE)
 	# elif(constraints=="sub2"):
-		# s = m.continuous_var_list(keys=n)
+		# s = m.addVars(n)
 		# for j in range(n):
 			# tempsum = sum(C[i,j]*x[i] for i in range(n))
 			# m.addConstr(s[j] >= -U[j]*x[j] + tempsum - L[j]*(1-x[j]))
@@ -347,16 +353,17 @@ def prlt1_linearization(quad): #only called from within reformulate_glover (make
 
 	#create model and add variables
 	m = Model(name='PRLT-1_linearization')
-	x = m.continuous_var_list(n, lb=0, ub=1)
-	w = m.continuous_var_matrix(keys1=n, keys2=n)
+	x = m.addVars(n, lb=0, ub=1)
+	w = m.addVars(n,n)
 
 	#add capacity constraint
-	m.addConstr(sum(x[i]*a[i] for i in range(n)) <= b)
+	for k in range(quad.m):
+		m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
 	#add auxiliary constraints
 	for i in range(n):
 		for j in range(i+1,n):
-			m.addConstr(w[i,j]==w[j,i], ctname='con'+str(i)+str(j))
+			m.addConstr(w[i,j]==w[j,i], name='con'+str(i)+str(j))
 
 	for j in range(n):
 		#NEED TO UPDATE FOR MULTIPLE KNAPSACK
@@ -397,10 +404,10 @@ def reformulate_glover(quad):
 def solve_model(m, n, dual=False): #make so solve doesn't need the n parameter
 	#start timer and solve model
 	start = timer()
-	assert m.solve(), "solve failed"
+	m.optimize()
 	end = timer()
 	solve_time = end-start
-	objective_value = m.objective_value
+	objective_value = m.objVal
 	#print(m.solution)
 	#when getting dual (for prlt) we are already continuous, dont waste time re-solving
 	if (dual==False):
@@ -408,8 +415,8 @@ def solve_model(m, n, dual=False): #make so solve doesn't need the n parameter
 		for i in range(n):
 			relaxation_var = m.get_var_by_name("binary_var_"+str(i))
 			m.set_var_type(relaxation_var,m.continuous_vartype)
-		assert m.solve(), "solve failed"
-	continuous_obj_value = m.objective_value
+		assert m.optimize(), "solve failed"
+	continuous_obj_value = m.objVal
 	integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
 
 	#retrieve dual variables
@@ -419,17 +426,17 @@ def solve_model(m, n, dual=False): #make so solve doesn't need the n parameter
 		for i in range(n):
 			for j in range(i+1,n):
 				con_name = 'con16'+str(i)+str(j)
-				duals16[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
+				duals16[i][j]=(m.getConstrByName(con_name).getAttr("Pi"))
 
 			for j in range(n):
 				if i==j:
 					continue
 				con_name = 'con17'+str(i)+str(j)
-				duals17[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
+				duals17[i][j]=(m.getConstrByName(con_name).getAttr("Pi"))
 
 	#terminate model
 	#TODO: could use with, then wouldn't need to manually call .end()
-	m.end()
+	m.terminate()
 
 	#create and return results dictionary
 	results = {"solve_time":solve_time,

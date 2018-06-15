@@ -44,3 +44,13 @@ m = gurobi.glovers_linearization(knap)[0]
 m.setParam('OutputFlag',0)
 m.optimize()
 print(m.objVal)
+
+m = gurobi.glovers_linearization_ext(knap)[0]
+m.setParam('OutputFlag',0)
+m.optimize()
+print(m.objVal)
+
+m = gurobi.reformulate_glover(knap)[0]
+m.setParam('OutputFlag',0)
+m.optimize()
+print(m.objVal)
