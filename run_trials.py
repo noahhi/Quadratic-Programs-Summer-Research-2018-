@@ -34,11 +34,13 @@ elif __name__=="__main__":
 
 knap = Knapsack()
 #knap.print_info()
-m = gurobi.standard_linearization(knap)[0]
-m.setParam('OutputFlag',0)
-m.optimize();
-print(m.objVal)
-m = cplex.standard_linearization(knap)[0]
-m.solve()
-print(m.objective_value)
+# m = gurobi.standard_linearization(knap)[0]
+# m.optimize();
+# print(m.objVal)
+# m = cplex.standard_linearization(knap)[0]
+# m.solve()
+# print(m.objective_value)
 m = gurobi.glovers_linearization(knap)[0]
+m.setParam('OutputFlag',0)
+m.optimize()
+print(m.objVal)
