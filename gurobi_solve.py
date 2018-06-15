@@ -403,6 +403,7 @@ def reformulate_glover(quad):
 
 def solve_model(m, n, dual=False): #make so solve doesn't need the n parameter
 	#start timer and solve model
+	m.setParam('OutputFlag',0)
 	start = timer()
 	m.optimize()
 	end = timer()
@@ -413,8 +414,10 @@ def solve_model(m, n, dual=False): #make so solve doesn't need the n parameter
 	if (dual==False):
 		#compute continuous relaxation and integrality_gap
 		for i in range(n):
-			relaxation_var = m.get_var_by_name("binary_var_"+str(i))
-			m.set_var_type(relaxation_var,m.continuous_vartype)
+			print(m.getVars)
+			#TODO fix this... what are variables called in gurobi??
+			relaxation_var = m.getVarByName("binary_var_"+str(i))
+			relaxation_var.VType = 'C'
 		assert m.optimize(), "solve failed"
 	continuous_obj_value = m.objVal
 	integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
@@ -514,7 +517,7 @@ def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
 			f.write("=============================================\n")
 
 		#df.loc[count] = [description, str(total_time/trials), str(np.std(run_times))]
-		results = {"type":type, "method":method, "size":size, "density":den, "avg_gap":total_gap/trials,
+		results = {"solver":"gurobi", "type":type, "method":method, "size":size, "density":den, "avg_gap":total_gap/trials,
 					"avg_solve_time":total_time/trials, "std_dev":np.std(run_times)}
 
 		#print summary by iterating thru results dict
