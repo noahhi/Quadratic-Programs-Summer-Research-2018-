@@ -11,9 +11,9 @@ if(len(sys.argv)==5): #batch file will go through here
 elif __name__=="__main__":
 	if True:
 		start = timer()
-		num_trials = 1
+		num_trials = 2
 		data = []
-		for i in range(3,4): #i*10 gives sizes
+		for i in range(4,5): #i*10 gives sizes
 			for j in range(1): #100-(j*10) gives densities
 				dict = cplex.run_trials(trials=num_trials, type="QKP", method="std", size=10*i, den=100-(j*10))
 				data.append(dict)
@@ -21,16 +21,18 @@ elif __name__=="__main__":
 				data.append(dict)
 				dict = cplex.run_trials(trials=num_trials, type="QKP", method="glover_ext", size=10*i, den=100-(j*10))
 				data.append(dict)
-				# dict = gurobi.run_trials(trials=num_trials, type="QKP", method="std", size=10*i, den=100-(j*10))
-				# data.append(dict)
-				# dict = gurobi.run_trials(trials=num_trials, type="QKP", method="glover", size=10*i, den=100-(j*10))
-				# data.append(dict)
-				# dict = gurobi.run_trials(trials=num_trials, type="QKP", method="glover_ext", size=10*i, den=100-(j*10))
-				# data.append(dict)
+				dict = gurobi.run_trials(trials=num_trials, type="QKP", method="std", size=10*i, den=100-(j*10))
+				data.append(dict)
+				dict = gurobi.run_trials(trials=num_trials, type="QKP", method="glover", size=10*i, den=100-(j*10))
+				data.append(dict)
+				dict = gurobi.run_trials(trials=num_trials, type="QKP", method="glover_ext", size=10*i, den=100-(j*10))
+				data.append(dict)
+				dict = gurobi.run_trials(trials=num_trials, type="QKP", method="prlt", size=10*i, den=100-(j*10))
+				data.append(dict)
 				print("(i,j) = ("+str(i)+","+str(j)+")")
 
 		df = pd.DataFrame(data)
-		df = df[["solver", "type", "method", "size", "density", "avg_gap", "avg_solve_time", "std_dev"]]  #reorder columns
+		df = df[["solver", "type", "method", "size", "density", "avg_gap", "avg_solve_time", "std_dev", "avg_obj_val"]]  #reorder columns
 		print(df)
 
 		time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
@@ -44,25 +46,25 @@ elif __name__=="__main__":
 		print("took " + str(end-start) + " seconds")
 
 if False:
-	knap = UQP()
-	knap.print_info(print_C=True)
+	knap = Knapsack()
+	knap.print_info()
 
 	#CPLEX TESTS
-	m = cplex.standard_linearization(knap)[0]
-	m.solve()
-	print(m.objective_value)
-
-	m = cplex.glovers_linearization(knap)[0]
-	m.solve()
-	print(m.objective_value)
-
-	m = cplex.reformulate_glover(knap)[0]
-	m.solve()
-	print(m.objective_value)
-
-	m = cplex.glovers_linearization_ext(knap)[0]
-	m.solve()
-	print(m.objective_value)
+	# m = cplex.standard_linearization(knap)[0]
+	# m.solve()
+	# print(m.objective_value)
+	#
+	# m = cplex.glovers_linearization(knap)[0]
+	# m.solve()
+	# print(m.objective_value)
+	#
+	# m = cplex.reformulate_glover(knap)[0]
+	# m.solve()
+	# print(m.objective_value)
+	#
+	# m = cplex.glovers_linearization_ext(knap)[0]
+	# m.solve()
+	# print(m.objective_value)
 
 	#GUROBI TESTS
 	m = gurobi.standard_linearization(knap)[0]

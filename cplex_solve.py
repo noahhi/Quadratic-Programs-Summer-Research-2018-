@@ -208,9 +208,18 @@ def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 
 	#model with rlt1, solve continuous relax and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
-	results = solve_model(m, quad.n, dual=2)
-	duals16 = results.get("duals16")
-	duals17 = results.get("duals17")
+	m.solve()
+	duals16 = np.zeros((n,n))
+	duals17 = np.zeros((n,n))
+	for i in range(n):
+		for j in range(i+1,n):
+			con_name = 'con16'+str(i)+str(j)
+			duals16[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
+		for j in range(n):
+			if i==j:
+				continue
+			con_name = 'con17'+str(i)+str(j)
+			duals17[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
 
 	D = np.zeros((n,n))
 	E = np.zeros((n,n))
@@ -378,9 +387,11 @@ def prlt1_linearization(quad): #only called from within reformulate_glover (make
 def reformulate_glover(quad):
 	start = timer()
 	m = prlt1_linearization(quad)
-	results = solve_model(m, quad.n, dual=True)
-	#print('prlt continuous relax ' + str(results.get("relaxed_solution")))
-	duals = results.get("duals16")
+	duals16 = np.zeros((n,n))
+	for i in range(n):
+		for j in range(i+1,n):
+			con_name = 'con16'+str(i)+str(j)
+			duals16[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
 	C = quad.C
 	for i in range(quad.n):
 		for j in range(i+1,quad.n):
@@ -392,41 +403,21 @@ def reformulate_glover(quad):
 	setup_time = end-start
 	return [new_m, setup_time]
 
-def solve_model(m, n, dual=0): #make so solve doesn't need the n parameter
+def solve_model(m, n): #TODO make it so dont need n as param
 	#start timer and solve model
 	start = timer()
 	assert m.solve(), "solve failed"
 	end = timer()
 	solve_time = end-start
 	objective_value = m.objective_value
-	#when getting dual (for prlt) we are already continuous, dont waste time re-solving
 	#TODO something funky going on here with duals. glover_Ext should minimize int_gap but it isnt!?
-	#TODO maybe shouldn't be using this method when solving continuous relax for duals.
-	if (dual==0):
-		#compute continuous relaxation and integrality_gap
-		for i in range(n):
-			relaxation_var = m.get_var_by_name("binary_var_"+str(i))
-			m.set_var_type(relaxation_var,m.continuous_vartype)
-		assert m.solve(), "solve failed"
+	#compute continuous relaxation and integrality_gap
+	for i in range(n):
+		relaxation_var = m.get_var_by_name("binary_var_"+str(i))
+		m.set_var_type(relaxation_var,m.continuous_vartype)
+	assert m.solve(), "solve failed"
 	continuous_obj_value = m.objective_value
 	integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
-
-	#retrieve dual variables
-	duals16 = np.zeros((n,n))
-	duals17 = np.zeros((n,n))
-	if(dual>0):
-		for i in range(n):
-			for j in range(i+1,n):
-				con_name = 'con16'+str(i)+str(j)
-				duals16[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
-			if dual>1:
-				#the partial rlt doesn't use the duals to con17
-				for j in range(n):
-					if i==j:
-						continue
-					con_name = 'con17'+str(i)+str(j)
-					duals17[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
-
 	#terminate model
 	#TODO: could use with, then wouldn't need to manually call .end()
 	m.end()
@@ -435,14 +426,12 @@ def solve_model(m, n, dual=0): #make so solve doesn't need the n parameter
 	results = {"solve_time":solve_time,
 				"objective_value":objective_value,
 				"relaxed_solution":continuous_obj_value,
-				"integrality_gap":integrality_gap,
-				"duals16":duals16,
-				"duals17":duals17}
+				"integrality_gap":integrality_gap}
 	return results
 
 def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
 	#keep track of total run time across all trials to compute avg later
-	total_time, total_gap = 0, 0
+	total_time, total_gap, total_obj = 0, 0, 0
 	#need individual run time to compute standard deviation
 	run_times = []
 
@@ -498,6 +487,7 @@ def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
 			instance_time = setup_time+solve_time
 			total_time += instance_time
 			run_times.append(instance_time)
+			total_obj += results.get("objective_value")
 			#TODO: could make this a for loop using "for key,val in results.items() - order may vary
 			total_gap += results.get("integrality_gap")
 			f.write("Integer Solution: " + str(results.get("objective_value"))+"\n")
@@ -509,7 +499,7 @@ def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
 
 		#df.loc[count] = [description, str(total_time/trials), str(np.std(run_times))]
 		results = {"solver":"cplex", "type":type, "method":method, "size":size, "density":den, "avg_gap":total_gap/trials,
-					"avg_solve_time":total_time/trials, "std_dev":np.std(run_times)}
+					"avg_solve_time":total_time/trials, "std_dev":np.std(run_times), "avg_obj_val":total_obj/trials}
 
 		#print summary by iterating thru results dict
 		f.write("\n\nSummary Statistics\n")
@@ -526,7 +516,7 @@ def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
 # m.solve()
 # print(m.get_solve_details().best_bound)
 # print(m.get_solve_details().mip_relative_gap)
-# r = solve_model(m, n=knap.n)
+# r = solve_model(m)
 # print(r.get("relaxed_solution"))
 #m.solve()
 #print(m.get_solve_details().best_bound)

@@ -147,62 +147,123 @@ def glovers_linearization(quad, bounds="tight", constraints="original"):
 	#return model
 	return [m,setup_time]
 
-def rlt1_linearization(quad):
-	n = quad.n
-	c = quad.c
-	C = quad.C
-	a = quad.a
-	b = quad.b
+def glovers_linearization_prlt(quad):
+	def prlt1_linearization(quad): #only called from within reformulate_glover (make inner func?)
+		n = quad.n
+		c = quad.c
+		C = quad.C
+		a = quad.a
+		b = quad.b
 
-	#create model and add variables
-	m = Model(name='RLT-1_linearization')
-	#default var type is continuous in gurobi
-	x = m.addVars(n,name='binary_var', lb=0, ub=1, vtype=GRB.CONTINUOUS) #named binary_var so can easily switch for debug
-	w = m.addVars(n,n)
-	y = m.addVars(n,n)
+		#create model and add variables
+		m = Model(name='PRLT-1_linearization')
+		x = m.addVars(n, lb=0, ub=1)
+		w = m.addVars(n,n)
 
-	#add capacity constraint(s)
-	for k in range(quad.m):
-		m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+		#add capacity constraint
+		for k in range(quad.m):
+			m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
-	#add auxiliary constraints
+		#add auxiliary constraints
+		for i in range(n):
+			for j in range(i+1,n):
+				m.addConstr(w[i,j]==w[j,i], name='con16'+str(i)+str(j))
+
+		for k in range(quad.m):
+			for j in range(n):
+				m.addConstr(sum(a[k][i]*w[i,j] for i in range(n) if i!=j)<=(b[k]-a[k][j])*x[j])
+				for i in range(n):
+					m.addConstr(w[i,j] <= x[j])
+
+		#add objective function
+		linear_values = sum(x[j]*c[j] for j in range(n))
+		quadratic_values = 0
+		for j in range(n):
+			for i in range(n):
+				if(i==j):
+					continue
+				quadratic_values = quadratic_values + (C[i,j]*w[i,j])
+		m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
+
+		#return model
+		return m
+	n=quad.n
+	start = timer()
+	m = prlt1_linearization(quad)
+	m.setParam('OutputFlag',0)
+	m.optimize()
+	duals16 = np.zeros((n,n))
 	for i in range(n):
 		for j in range(i+1,n):
-			#con 16
-			m.addConstr(w[i,j]==w[j,i], name='con16'+str(i)+str(j))
+			con_name = 'con16'+str(i)+str(j)
+			duals16[i][j]=(m.getConstrByName(con_name).getAttr("Pi"))
+	C = quad.C
+	for i in range(quad.n):
+		for j in range(i+1,quad.n):
+			duals16[j,i]=C[j,i]+duals16[i,j]
+			duals16[i,j]=C[i,j]-duals16[i,j]
+	quad.C = duals16
+	new_m = glovers_linearization(quad, bounds="tight", constraints="original")[0]
+	end = timer()
+	setup_time = end-start
+	return [new_m, setup_time]
 
-	for k in range(quad.m):
+def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
+	def rlt1_linearization(quad):
+		n = quad.n
+		c = quad.c
+		C = quad.C
+		a = quad.a
+		b = quad.b
+
+		#create model and add variables
+		m = Model(name='RLT-1_linearization')
+		#default var type is continuous in gurobi
+		x = m.addVars(n,name='binary_var', lb=0, ub=1, vtype=GRB.CONTINUOUS) #named binary_var so can easily switch for debug
+		w = m.addVars(n,n)
+		y = m.addVars(n,n)
+
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+
+		#add auxiliary constraints
+		for i in range(n):
+			for j in range(i+1,n):
+				#con 16
+				m.addConstr(w[i,j]==w[j,i], name='con16'+str(i)+str(j))
+
+		for k in range(quad.m):
+			for j in range(n):
+				#con 12
+				m.addConstr(sum(a[k][i]*w[i,j] for i in range(n) if i!=j)<=(b[k]-a[k][j])*x[j])
+				#con 14
+				m.addConstr(sum(a[k][i]*y[i,j] for i in range(n) if i!=j)<=b[k]*(1-x[j]))
+
 		for j in range(n):
-			#con 12
-			m.addConstr(sum(a[k][i]*w[i,j] for i in range(n) if i!=j)<=(b[k]-a[k][j])*x[j])
-			#con 14
-			m.addConstr(sum(a[k][i]*y[i,j] for i in range(n) if i!=j)<=b[k]*(1-x[j]))
+			for i in range(n):
+				if(i==j):
+					continue
+				#con 13 (w>=0 implied) - imp to add anyways?
+				m.addConstr(w[i,j] <= x[j])
+				#con 15 (y>=0 implied)
+				m.addConstr(y[i,j] <= 1-x[j])
+				#con 17
+				m.addConstr(y[i,j] == x[i]-w[i,j], name='con17'+str(i)+str(j))
 
-	for j in range(n):
-		for i in range(n):
-			if(i==j):
-				continue
-			#con 13 (w>=0 implied) - imp to add anyways?
-			m.addConstr(w[i,j] <= x[j])
-			#con 15 (y>=0 implied)
-			m.addConstr(y[i,j] <= 1-x[j])
-			#con 17
-			m.addConstr(y[i,j] == x[i]-w[i,j], name='con17'+str(i)+str(j))
+		#add objective function
+		linear_values = sum(x[j]*c[j] for j in range(n))
+		quadratic_values = 0
+		for j in range(n):
+			for i in range(n):
+				if(i==j):
+					continue
+				quadratic_values = quadratic_values + (C[i,j]*w[i,j])
+		m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
 
-	#add objective function
-	linear_values = sum(x[j]*c[j] for j in range(n))
-	quadratic_values = 0
-	for j in range(n):
-		for i in range(n):
-			if(i==j):
-				continue
-			quadratic_values = quadratic_values + (C[i,j]*w[i,j])
-	m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
+		#return model
+		return m
 
-	#return model
-	return m
-
-def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 	start = timer()
 	n = quad.n
 	c = quad.c
@@ -210,13 +271,23 @@ def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 	a = quad.a
 	b = quad.b
 
-	#model with rlt1, solve continuous relax and get duals to constraints 16,17
+	#model with continuous relaxed rlt1 and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
 	m.setParam('OutputFlag',0)
-	results = solve_model(m, quad.n, dual=2)
-	duals16 = results.get("duals16")
-	duals17 = results.get("duals17")
-
+	m.optimize()
+	#print(m.objVal)     #this should be continuous relax solution to glover_ext.
+	#retrieve dual variables
+	duals16 = np.zeros((n,n))
+	duals17 = np.zeros((n,n))
+	for i in range(n):
+		for j in range(i+1,n):
+			con_name = 'con16'+str(i)+str(j)
+			duals16[i][j]=(m.getConstrByName(con_name).getAttr("Pi"))
+		for j in range(n):
+			if i==j:
+				continue
+			con_name = 'con17'+str(i)+str(j)
+			duals17[i][j]=(m.getConstrByName(con_name).getAttr("Pi"))
 	D = np.zeros((n,n))
 	E = np.zeros((n,n))
 	#optimal split, found using dual vars from rlt1 continuous relaxation
@@ -344,115 +415,40 @@ def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 	#return model
 	return [m,setup_time]
 
-def prlt1_linearization(quad): #only called from within reformulate_glover (make inner func?)
-	n = quad.n
-	c = quad.c
-	C = quad.C
-	a = quad.a
-	b = quad.b
-
-	#create model and add variables
-	m = Model(name='PRLT-1_linearization')
-	x = m.addVars(n, lb=0, ub=1)
-	w = m.addVars(n,n)
-
-	#add capacity constraint
-	for k in range(quad.m):
-		m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-
-	#add auxiliary constraints
-	for i in range(n):
-		for j in range(i+1,n):
-			m.addConstr(w[i,j]==w[j,i], name='con16'+str(i)+str(j))
-
-	for k in range(quad.m):
-		for j in range(n):
-			m.addConstr(sum(a[k][i]*w[i,j] for i in range(n) if i!=j)<=(b[k]-a[k][j])*x[j])
-			for i in range(n):
-				m.addConstr(w[i,j] <= x[j])
-
-	#add objective function
-	linear_values = sum(x[j]*c[j] for j in range(n))
-	quadratic_values = 0
-	for j in range(n):
-		for i in range(n):
-			if(i==j):
-				continue
-			quadratic_values = quadratic_values + (C[i,j]*w[i,j])
-	m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
-
-	#return model
-	return m
-
-def reformulate_glover(quad):
-	start = timer()
-	m = prlt1_linearization(quad)
-	results = solve_model(m, quad.n, dual=True)
-	#print('prlt continuous relax ' + str(results.get("relaxed_solution")))
-	duals = results.get("duals16")
-	C = quad.C
-	for i in range(quad.n):
-		for j in range(i+1,quad.n):
-			duals[j,i]=C[j,i]+duals[i,j]
-			duals[i,j]=C[i,j]-duals[i,j]
-	quad.C = duals
-	new_m = glovers_linearization(quad, bounds="tight", constraints="original")[0]
-	end = timer()
-	setup_time = end-start
-	return [new_m, setup_time]
-
-def solve_model(m, n, dual=False): #make so solve doesn't need the n parameter
-	#start timer and solve model
+def solve_model(m):
+	"""
+	Takes in an unsolved gurobi model of a MIP. Solves it as well as continuous
+	relaxation and returns a dictionary containing relevant solve details
+	"""
+	#turn off model output. otherwise prints bunch of info, clogs console
 	m.setParam('OutputFlag',0)
+
+	#start timer and solve model
 	start = timer()
 	m.optimize()
 	end = timer()
 	solve_time = end-start
 	objective_value = m.objVal
-	#print(m.solution)
-	#when getting dual (for prlt) we are already continuous, dont waste time re-solving
-	if (dual==False):
-		#compute continuous relaxation and integrality_gap
-		r = m.relax()
-		r.optimize()
-		continuous_obj_value = r.objVal
-		integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
-	else:
-		continuous_obj_value = objective_value
-		integrality_gap = 0
 
-	#retrieve dual variables
-	duals16 = np.zeros((n,n))
-	duals17 = np.zeros((n,n))
-	if(dual==True):
-		for i in range(n):
-			for j in range(i+1,n):
-				con_name = 'con16'+str(i)+str(j)
-				#TODO getconbyname isn't working (returning NoneType) prlt work with cplex?
-				duals16[i][j]=(m.getConstrByName(con_name).getAttr("Pi"))
-			if dual>1:
-				for j in range(n):
-					if i==j:
-						continue
-					con_name = 'con17'+str(i)+str(j)
-					duals17[i][j]=(m.getConstrByName(con_name).getAttr("Pi"))
-
-	#terminate model
-	#TODO: could use with, then wouldn't need to manually call .end()
+	#relax and solve to get continuous relaxation and integrality_gap
+	r = m.relax()
+	r.optimize()
+	continuous_obj_value = r.objVal
+	integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
+	#TODO double check this relax is same as cplex relax
+	#terminate model so not allocating resources
 	m.terminate()
 
 	#create and return results dictionary
 	results = {"solve_time":solve_time,
 				"objective_value":objective_value,
 				"relaxed_solution":continuous_obj_value,
-				"integrality_gap":integrality_gap,
-				"duals16":duals16,
-				"duals17":duals17}
+				"integrality_gap":integrality_gap}
 	return results
 
-def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
+def run_trials(trials=10,type="QKP",method="std",size=5,den=100): #TODO this method should be in run_trials.py
 	#keep track of total run time across all trials to compute avg later
-	total_time, total_gap = 0, 0
+	total_time, total_gap, total_obj = 0, 0, 0
 	#need individual run time to compute standard deviation
 	run_times = []
 
@@ -502,11 +498,12 @@ def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
 			#retrieve setup time from modeling process
 			setup_time = m[1]
 			#solve model and calculate instance solve time
-			results = solve_model(m[0], quad.n)
+			results = solve_model(m[0])
 			solve_time = results.get("solve_time")
 			instance_time = setup_time+solve_time
 			total_time += instance_time
 			run_times.append(instance_time)
+			total_obj += results.get("objective_value")
 			#TODO: could make this a for loop using "for key,val in results.items() - order may vary
 			total_gap += results.get("integrality_gap")
 			f.write("Integer Solution: " + str(results.get("objective_value"))+"\n")
@@ -518,7 +515,7 @@ def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
 
 		#df.loc[count] = [description, str(total_time/trials), str(np.std(run_times))]
 		results = {"solver":"gurobi", "type":type, "method":method, "size":size, "density":den, "avg_gap":total_gap/trials,
-					"avg_solve_time":total_time/trials, "std_dev":np.std(run_times)}
+					"avg_solve_time":total_time/trials, "std_dev":np.std(run_times), "avg_obj_val":total_obj/trials}
 
 		#print summary by iterating thru results dict
 		f.write("\n\nSummary Statistics\n")
@@ -529,3 +526,10 @@ def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
 		f.write("Standard Deviation: " + str(np.std(run_times))+"\n")
 
 		return results
+
+# knap = Knapsack(n=40)
+# m = glovers_linearization_ext(knap)[0]
+# r = solve_model(m)
+# print(r.get("objective_value"))
+# print(r.get("relaxed_solution"))
+# print(r.get("integrality_gap"))
