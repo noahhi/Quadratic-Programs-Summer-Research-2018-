@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-data=pd.read_excel(open("C:/Users/huntisan/Desktop/project/std_glove_data.xlsx", "rb"))
+data=pd.read_excel(open("C:/Users/huntisan/Desktop/summer2018/std_glove_data.xlsx", "rb"))
 relevant_data = data.loc[:,["method", "size", "avg_solve_time"]]
 big_sizes = relevant_data.loc[:, "size"] > 90
 big_sizes = relevant_data[big_sizes]

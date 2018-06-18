@@ -207,7 +207,7 @@ def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 
 	#model with rlt1, solve continuous relax and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
-	results = solve_model(m, quad.n, dual=True)
+	results = solve_model(m, quad.n, dual=2)
 	duals16 = results.get("duals16")
 	duals17 = results.get("duals17")
 
@@ -347,18 +347,19 @@ def prlt1_linearization(quad): #only called from within reformulate_glover (make
 	w = m.continuous_var_matrix(keys1=n, keys2=n)
 
 	#add capacity constraint
-	m.add_constraint(m.sum(x[i]*a[i] for i in range(n)) <= b)
+	for k in range(quad.m):
+		m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
 	#add auxiliary constraints
 	for i in range(n):
 		for j in range(i+1,n):
-			m.add_constraint(w[i,j]==w[j,i], ctname='con'+str(i)+str(j))
+			m.add_constraint(w[i,j]==w[j,i], ctname='con16'+str(i)+str(j))
 
-	for j in range(n):
-		#NEED TO UPDATE FOR MULTIPLE KNAPSACK
-		m.add_constraint(m.sum(a[i]*w[i,j] for i in range(n) if i!=j)<=(b-a[j])*x[j])
-		for i in range(n):
-			m.add_constraint(w[i,j] <= x[j])
+	for k in range(quad.m):
+		for j in range(n):
+			m.add_constraint(m.sum(a[k][i]*w[i,j] for i in range(n) if i!=j)<=(b[k]-a[k][j])*x[j])
+			for i in range(n):
+				m.add_constraint(w[i,j] <= x[j])
 
 	#add objective function
 	linear_values = m.sum(x[j]*c[j] for j in range(n))
@@ -378,7 +379,7 @@ def reformulate_glover(quad):
 	m = prlt1_linearization(quad)
 	results = solve_model(m, quad.n, dual=True)
 	#print('prlt continuous relax ' + str(results.get("relaxed_solution")))
-	duals = results.get("duals")
+	duals = results.get("duals16")
 	C = quad.C
 	for i in range(quad.n):
 		for j in range(i+1,quad.n):
@@ -390,7 +391,7 @@ def reformulate_glover(quad):
 	setup_time = end-start
 	return [new_m, setup_time]
 
-def solve_model(m, n, dual=False): #make so solve doesn't need the n parameter
+def solve_model(m, n, dual=0): #make so solve doesn't need the n parameter
 	#start timer and solve model
 	start = timer()
 	assert m.solve(), "solve failed"
@@ -416,12 +417,13 @@ def solve_model(m, n, dual=False): #make so solve doesn't need the n parameter
 			for j in range(i+1,n):
 				con_name = 'con16'+str(i)+str(j)
 				duals16[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
-
-			for j in range(n):
-				if i==j:
-					continue
-				con_name = 'con17'+str(i)+str(j)
-				duals17[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
+			if dual>1:
+				#the partial rlt doesn't use the duals to con17
+				for j in range(n):
+					if i==j:
+						continue
+					con_name = 'con17'+str(i)+str(j)
+					duals17[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
 
 	#terminate model
 	#TODO: could use with, then wouldn't need to manually call .end()

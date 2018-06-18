@@ -7,7 +7,7 @@ from timeit import default_timer as timer
 if(len(sys.argv)==5): #batch file will go through here
 	run_trials(trials=5,type=sys.argv[1],method=sys.argv[2],den=int(sys.argv[3]),size=int(sys.argv[4]))
 elif __name__=="__main__":
-	if True:
+	if False:
 		start = timer()
 
 		data = []
@@ -39,25 +39,43 @@ elif __name__=="__main__":
 		end = timer()
 		print("took " + str(end-start) + " seconds")
 
-#knap = Knapsack()
-#knap.print_info()
-# m = gurobi.standard_linearization(knap)[0]
-# m.optimize();
-# print(m.objVal)
-# m = cplex.standard_linearization(knap)[0]
-# m.solve()
-# print(m.objective_value)
-# m = gurobi.glovers_linearization(knap)[0]
-# m.setParam('OutputFlag',0)
-# m.optimize()
-# print(m.objVal)
-#
-# m = gurobi.glovers_linearization_ext(knap)[0]
-# m.setParam('OutputFlag',0)
-# m.optimize()
-# print(m.objVal)
-#
-# m = gurobi.reformulate_glover(knap)[0]
-# m.setParam('OutputFlag',0)
-# m.optimize()
-# print(m.objVal)
+knap = Knapsack()
+knap.print_info()
+
+#CPLEX TESTS
+m = cplex.standard_linearization(knap)[0]
+m.solve()
+print(m.objective_value)
+
+m = cplex.glovers_linearization(knap)[0]
+m.solve()
+print(m.objective_value)
+
+m = cplex.reformulate_glover(knap)[0]
+m.solve()
+print(m.objective_value)
+
+m = cplex.glovers_linearization_ext(knap)[0]
+m.solve()
+print(m.objective_value)
+
+#GUROBI TESTS
+m = gurobi.standard_linearization(knap)[0]
+m.setParam('OutputFlag',0)
+m.optimize();
+print(m.objVal)
+
+m = gurobi.glovers_linearization(knap)[0]
+m.setParam('OutputFlag',0)
+m.optimize()
+print(m.objVal)
+
+m = gurobi.reformulate_glover(knap)[0]
+m.setParam('OutputFlag',0)
+m.optimize()
+print(m.objVal)
+
+m = gurobi.glovers_linearization_ext(knap)[0]
+m.setParam('OutputFlag',0)
+m.optimize()
+print(m.objVal)

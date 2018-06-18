@@ -213,7 +213,7 @@ def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 	#model with rlt1, solve continuous relax and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
 	m.setParam('OutputFlag',0)
-	results = solve_model(m, quad.n, dual=True)
+	results = solve_model(m, quad.n, dual=2)
 	duals16 = results.get("duals16")
 	duals17 = results.get("duals17")
 
@@ -363,13 +363,13 @@ def prlt1_linearization(quad): #only called from within reformulate_glover (make
 	#add auxiliary constraints
 	for i in range(n):
 		for j in range(i+1,n):
-			m.addConstr(w[i,j]==w[j,i], name='con'+str(i)+str(j))
+			m.addConstr(w[i,j]==w[j,i], name='con16'+str(i)+str(j))
 
-	for j in range(n):
-		#NEED TO UPDATE FOR MULTIPLE KNAPSACK
-		m.addConstr(sum(a[i]*w[i,j] for i in range(n) if i!=j)<=(b-a[j])*x[j])
-		for i in range(n):
-			m.addConstr(w[i,j] <= x[j])
+	for k in range(quad.m):
+		for j in range(n):
+			m.addConstr(sum(a[k][i]*w[i,j] for i in range(n) if i!=j)<=(b[k]-a[k][j])*x[j])
+			for i in range(n):
+				m.addConstr(w[i,j] <= x[j])
 
 	#add objective function
 	linear_values = sum(x[j]*c[j] for j in range(n))
@@ -389,7 +389,7 @@ def reformulate_glover(quad):
 	m = prlt1_linearization(quad)
 	results = solve_model(m, quad.n, dual=True)
 	#print('prlt continuous relax ' + str(results.get("relaxed_solution")))
-	duals = results.get("duals")
+	duals = results.get("duals16")
 	C = quad.C
 	for i in range(quad.n):
 		for j in range(i+1,quad.n):
@@ -429,13 +429,14 @@ def solve_model(m, n, dual=False): #make so solve doesn't need the n parameter
 		for i in range(n):
 			for j in range(i+1,n):
 				con_name = 'con16'+str(i)+str(j)
+				#TODO getconbyname isn't working (returning NoneType) prlt work with cplex?
 				duals16[i][j]=(m.getConstrByName(con_name).getAttr("Pi"))
-
-			for j in range(n):
-				if i==j:
-					continue
-				con_name = 'con17'+str(i)+str(j)
-				duals17[i][j]=(m.getConstrByName(con_name).getAttr("Pi"))
+			if dual>1:
+				for j in range(n):
+					if i==j:
+						continue
+					con_name = 'con17'+str(i)+str(j)
+					duals17[i][j]=(m.getConstrByName(con_name).getAttr("Pi"))
 
 	#terminate model
 	#TODO: could use with, then wouldn't need to manually call .end()
