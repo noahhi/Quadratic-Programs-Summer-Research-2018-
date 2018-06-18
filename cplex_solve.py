@@ -95,6 +95,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original"):
 		u_bound_x = u_bound_m.continuous_var_list(n, ub=1)
 		l_bound_x = l_bound_m.continuous_var_list(n, ub=1)
 		for k in range(quad.m):
+			#TODO this gives errors for HSP and UQP
 			u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
 			l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
 		for j in range(n):
@@ -398,9 +399,10 @@ def solve_model(m, n, dual=0): #make so solve doesn't need the n parameter
 	end = timer()
 	solve_time = end-start
 	objective_value = m.objective_value
-	#print(m.solution)
 	#when getting dual (for prlt) we are already continuous, dont waste time re-solving
-	if (dual==False):
+	#TODO something funky going on here with duals. glover_Ext should minimize int_gap but it isnt!?
+	#TODO maybe shouldn't be using this method when solving continuous relax for duals.
+	if (dual==0):
 		#compute continuous relaxation and integrality_gap
 		for i in range(n):
 			relaxation_var = m.get_var_by_name("binary_var_"+str(i))
@@ -412,7 +414,7 @@ def solve_model(m, n, dual=0): #make so solve doesn't need the n parameter
 	#retrieve dual variables
 	duals16 = np.zeros((n,n))
 	duals17 = np.zeros((n,n))
-	if(dual==True):
+	if(dual>0):
 		for i in range(n):
 			for j in range(i+1,n):
 				con_name = 'con16'+str(i)+str(j)
@@ -463,6 +465,7 @@ def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
 			f.write("Iteration "+str(i+1)+"\n")
 
 			#create new instance of desired problem type
+			#TODO seeds should vary based on parameters
 			if type=="QKP":
 				quad = Knapsack(seed=i, n=size, density=den)
 			elif type=="KQKP":
@@ -517,3 +520,14 @@ def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
 		f.write("Standard Deviation: " + str(np.std(run_times))+"\n")
 
 		return results
+
+# knap = Knapsack()
+# m = standard_linearization(knap)[0]
+# m.solve()
+# print(m.get_solve_details().best_bound)
+# print(m.get_solve_details().mip_relative_gap)
+# r = solve_model(m, n=knap.n)
+# print(r.get("relaxed_solution"))
+#m.solve()
+#print(m.get_solve_details().best_bound)
+#print(m.objective_value)

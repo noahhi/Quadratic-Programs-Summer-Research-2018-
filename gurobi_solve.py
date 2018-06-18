@@ -413,14 +413,13 @@ def solve_model(m, n, dual=False): #make so solve doesn't need the n parameter
 	#when getting dual (for prlt) we are already continuous, dont waste time re-solving
 	if (dual==False):
 		#compute continuous relaxation and integrality_gap
-		for i in range(n):
-			print(m.getVars)
-			#TODO fix this... what are variables called in gurobi??
-			relaxation_var = m.getVarByName("binary_var_"+str(i))
-			relaxation_var.VType = 'C'
-		assert m.optimize(), "solve failed"
-	continuous_obj_value = m.objVal
-	integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
+		r = m.relax()
+		r.optimize()
+		continuous_obj_value = r.objVal
+		integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
+	else:
+		continuous_obj_value = objective_value
+		integrality_gap = 0
 
 	#retrieve dual variables
 	duals16 = np.zeros((n,n))
