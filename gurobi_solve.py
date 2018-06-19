@@ -1,6 +1,5 @@
 from quadratics import *
 import numpy as np
-import pandas as pd
 from timeit import default_timer as timer
 from gurobipy import *
 
@@ -445,10 +444,3 @@ def solve_model(m):
 				"relaxed_solution":continuous_obj_value,
 				"integrality_gap":integrality_gap}
 	return results
-
-# knap = Knapsack(n=40)
-# m = glovers_linearization_ext(knap)[0]
-# r = solve_model(m)
-# print(r.get("objective_value"))
-# print(r.get("relaxed_solution"))
-# print(r.get("integrality_gap"))

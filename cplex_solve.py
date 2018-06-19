@@ -1,4 +1,4 @@
-from quadratics import Knapsack, UQP, HSP
+from quadratics import *
 import numpy as np
 from timeit import default_timer as timer
 from docplex.mp.model import Model
@@ -144,61 +144,121 @@ def glovers_linearization(quad, bounds="tight", constraints="original"):
 	#return model
 	return [m,setup_time]
 
-def rlt1_linearization(quad):
-	n = quad.n
-	c = quad.c
-	C = quad.C
-	a = quad.a
-	b = quad.b
+def glovers_linearization_prlt(quad):
+	def prlt1_linearization(quad): #only called from within reformulate_glover (make inner func?)
+		n = quad.n
+		c = quad.c
+		C = quad.C
+		a = quad.a
+		b = quad.b
 
-	#create model and add variables
-	m = Model(name='RLT-1_linearization')
-	x = m.continuous_var_list(n,name='binary_var', lb=0, ub=1) #named binary_var so can easily switch for debug
-	w = m.continuous_var_matrix(keys1=n, keys2=n)
-	y = m.continuous_var_matrix(keys1=n, keys2=n)
+		#create model and add variables
+		m = Model(name='PRLT-1_linearization')
+		x = m.continuous_var_list(n, lb=0, ub=1)
+		w = m.continuous_var_matrix(keys1=n, keys2=n)
 
-	#add capacity constraint(s)
-	for k in range(quad.m):
-		m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+		#add capacity constraint
+		for k in range(quad.m):
+			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
-	#add auxiliary constraints
+		#add auxiliary constraints
+		for i in range(n):
+			for j in range(i+1,n):
+				m.add_constraint(w[i,j]==w[j,i], ctname='con16'+str(i)+str(j))
+
+		for k in range(quad.m):
+			for j in range(n):
+				m.add_constraint(m.sum(a[k][i]*w[i,j] for i in range(n) if i!=j)<=(b[k]-a[k][j])*x[j])
+				for i in range(n):
+					m.add_constraint(w[i,j] <= x[j])
+
+		#add objective function
+		linear_values = m.sum(x[j]*c[j] for j in range(n))
+		quadratic_values = 0
+		for j in range(n):
+			for i in range(n):
+				if(i==j):
+					continue
+				quadratic_values = quadratic_values + (C[i,j]*w[i,j])
+		m.maximize(linear_values + quadratic_values)
+
+		#return model
+		return m
+	n=quad.n
+	start = timer()
+	m = prlt1_linearization(quad)
+	m.solve()
+	duals16 = np.zeros((n,n))
 	for i in range(n):
 		for j in range(i+1,n):
-			#con 16
-			m.add_constraint(w[i,j]==w[j,i], ctname='con16'+str(i)+str(j))
+			con_name = 'con16'+str(i)+str(j)
+			duals16[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
+	C = quad.C
+	for i in range(quad.n):
+		for j in range(i+1,quad.n):
+			duals16[j,i]=C[j,i]+duals16[i,j]
+			duals16[i,j]=C[i,j]-duals16[i,j]
+	quad.C = duals16
+	new_m = glovers_linearization(quad, bounds="tight", constraints="original")[0]
+	end = timer()
+	setup_time = end-start
+	return [new_m, setup_time]
 
-	for k in range(quad.m):
+def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
+	def rlt1_linearization(quad):
+		n = quad.n
+		c = quad.c
+		C = quad.C
+		a = quad.a
+		b = quad.b
+
+		#create model and add variables
+		m = Model(name='RLT-1_linearization')
+		x = m.continuous_var_list(n,name='binary_var', lb=0, ub=1) #named binary_var so can easily switch for debug
+		w = m.continuous_var_matrix(keys1=n, keys2=n)
+		y = m.continuous_var_matrix(keys1=n, keys2=n)
+
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+
+		#add auxiliary constraints
+		for i in range(n):
+			for j in range(i+1,n):
+				#con 16
+				m.add_constraint(w[i,j]==w[j,i], ctname='con16'+str(i)+str(j))
+
+		for k in range(quad.m):
+			for j in range(n):
+				#con 12
+				m.add_constraint(m.sum(a[k][i]*w[i,j] for i in range(n) if i!=j)<=(b[k]-a[k][j])*x[j])
+				#con 14
+				m.add_constraint(m.sum(a[k][i]*y[i,j] for i in range(n) if i!=j)<=b[k]*(1-x[j]))
+
 		for j in range(n):
-			#con 12
-			m.add_constraint(m.sum(a[k][i]*w[i,j] for i in range(n) if i!=j)<=(b[k]-a[k][j])*x[j])
-			#con 14
-			m.add_constraint(m.sum(a[k][i]*y[i,j] for i in range(n) if i!=j)<=b[k]*(1-x[j]))
+			for i in range(n):
+				if(i==j):
+					continue
+				#con 13 (w>=0 implied) - imp to add anyways?
+				m.add_constraint(w[i,j] <= x[j])
+				#con 15 (y>=0 implied)
+				m.add_constraint(y[i,j] <= 1-x[j])
+				#con 17
+				m.add_constraint(y[i,j] == x[i]-w[i,j], ctname='con17'+str(i)+str(j))
 
-	for j in range(n):
-		for i in range(n):
-			if(i==j):
-				continue
-			#con 13 (w>=0 implied) - imp to add anyways?
-			m.add_constraint(w[i,j] <= x[j])
-			#con 15 (y>=0 implied)
-			m.add_constraint(y[i,j] <= 1-x[j])
-			#con 17
-			m.add_constraint(y[i,j] == x[i]-w[i,j], ctname='con17'+str(i)+str(j))
+		#add objective function
+		linear_values = m.sum(x[j]*c[j] for j in range(n))
+		quadratic_values = 0
+		for j in range(n):
+			for i in range(n):
+				if(i==j):
+					continue
+				quadratic_values = quadratic_values + (C[i,j]*w[i,j])
+		m.maximize(linear_values + quadratic_values)
 
-	#add objective function
-	linear_values = m.sum(x[j]*c[j] for j in range(n))
-	quadratic_values = 0
-	for j in range(n):
-		for i in range(n):
-			if(i==j):
-				continue
-			quadratic_values = quadratic_values + (C[i,j]*w[i,j])
-	m.maximize(linear_values + quadratic_values)
+		#return model
+		return m
 
-	#return model
-	return m
-
-def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 	start = timer()
 	n = quad.n
 	c = quad.c
@@ -247,7 +307,7 @@ def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 			# E[j,i] = C[i,j]/4
 
 	#create model and add variables
-	m = Model(name='glovers_linearization_ext_'+bounds+'_'+constraints)
+	m = Model(name='glovers_linearization_rlt_'+bounds+'_'+constraints)
 	x = m.binary_var_list(n, name="binary_var")
 
 	#add capacity constraint(s)
@@ -344,65 +404,6 @@ def glovers_linearization_ext(quad, bounds="tight", constraints="original"):
 	#return model
 	return [m,setup_time]
 
-def prlt1_linearization(quad): #only called from within reformulate_glover (make inner func?)
-	n = quad.n
-	c = quad.c
-	C = quad.C
-	a = quad.a
-	b = quad.b
-
-	#create model and add variables
-	m = Model(name='PRLT-1_linearization')
-	x = m.continuous_var_list(n, lb=0, ub=1)
-	w = m.continuous_var_matrix(keys1=n, keys2=n)
-
-	#add capacity constraint
-	for k in range(quad.m):
-		m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-
-	#add auxiliary constraints
-	for i in range(n):
-		for j in range(i+1,n):
-			m.add_constraint(w[i,j]==w[j,i], ctname='con16'+str(i)+str(j))
-
-	for k in range(quad.m):
-		for j in range(n):
-			m.add_constraint(m.sum(a[k][i]*w[i,j] for i in range(n) if i!=j)<=(b[k]-a[k][j])*x[j])
-			for i in range(n):
-				m.add_constraint(w[i,j] <= x[j])
-
-	#add objective function
-	linear_values = m.sum(x[j]*c[j] for j in range(n))
-	quadratic_values = 0
-	for j in range(n):
-		for i in range(n):
-			if(i==j):
-				continue
-			quadratic_values = quadratic_values + (C[i,j]*w[i,j])
-	m.maximize(linear_values + quadratic_values)
-
-	#return model
-	return m
-
-def reformulate_glover(quad):
-	start = timer()
-	m = prlt1_linearization(quad)
-	duals16 = np.zeros((n,n))
-	for i in range(n):
-		for j in range(i+1,n):
-			con_name = 'con16'+str(i)+str(j)
-			duals16[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
-	C = quad.C
-	for i in range(quad.n):
-		for j in range(i+1,quad.n):
-			duals[j,i]=C[j,i]+duals[i,j]
-			duals[i,j]=C[i,j]-duals[i,j]
-	quad.C = duals
-	new_m = glovers_linearization(quad, bounds="tight", constraints="original")[0]
-	end = timer()
-	setup_time = end-start
-	return [new_m, setup_time]
-
 def solve_model(model):
 	#use with block to automatically call m.end() when finished
 	with model as m:
@@ -430,19 +431,5 @@ def solve_model(model):
 				"integrality_gap":integrality_gap}
 	return results
 
-knap = Knapsack(n=30)
-m = glovers_linearization_ext(knap)[0]
-r = solve_model(m)
-print(r.get("objective_value"))
-print(r.get("relaxed_solution"))
-# m.solve()
-# print(m.get_solve_details().best_bound)
-# print(m.get_solve_details().mip_relative_gap)
-# r = solve_model(m)
-# print(r.get("relaxed_solution"))
-#m.solve()
-#print(m.get_solve_details().best_bound)
-#print(m.objective_value)
 
-
-#TODO something funky going on here (with duals?). glover_Ext should minimize int_gap but it isnt!?
+#TODO something funky going on here (with duals?). glover_rlt should minimize int_gap but it isnt!?

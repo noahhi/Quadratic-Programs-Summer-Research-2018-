@@ -7,7 +7,11 @@ import pandas as pd
 from timeit import default_timer as timer
 
 
-def run_trials(trials=10,solver="cplex",type="QKP",method="std",size=5,den=100, options=0):
+def run_trials(trials=5,solver="cplex",type="QKP",method="std",size=5,den=100, options=0):
+	"""
+	Runs the same problem type thru given solver with given method repeatedly to get
+	an average solve time
+	"""
 	#keep track of total run time across all trials to compute avg later
 	total_time, total_gap, total_obj = 0, 0, 0
 	#need individual run time to compute standard deviation
@@ -50,10 +54,10 @@ def run_trials(trials=10,solver="cplex",type="QKP",method="std",size=5,den=100, 
 					m = cplex.standard_linearization(quad)
 				elif method=="glover":
 					m = cplex.glovers_linearization(quad)
-				elif method =="prlt":
-					m = cplex.reformulate_glover(quad)
-				elif method=="glover_ext":
-					m = cplex.glovers_linearization_ext(quad)
+				elif method=="glover_rlt":
+					m = cplex.glovers_linearization_rlt(quad)
+				elif method=="glover_prlt":
+					m = cplex.glovers_linearization_prlt(quad)
 				else:
 					raise Exception(str(method) + " is not a valid method type")
 				results = cplex.solve_model(m[0])
@@ -62,10 +66,10 @@ def run_trials(trials=10,solver="cplex",type="QKP",method="std",size=5,den=100, 
 					m = gurobi.standard_linearization(quad)
 				elif method=="glover":
 					m = gurobi.glovers_linearization(quad)
-				elif method =="prlt":
-					m = gurobi.reformulate_glover(quad)
-				elif method=="glover_ext":
+				elif method=="glover_rlt":
 					m = gurobi.glovers_linearization_rlt(quad)
+				elif method=="glover_prlt":
+					m = gurobi.glovers_linearization_prlt(quad)
 				else:
 					raise Exception(str(method) + " is not a valid method type")
 				results = gurobi.solve_model(m[0])
@@ -115,19 +119,30 @@ if __name__=="__main__":
 	data = []
 	for i in sizes:
 		for j in densities:
+			"""
+			solver = solver to use ("cplex", "gurobi")
+			type = problem type ("QKP", "KQKP", "UQP", "HSP")
+			method = linearization technique ("std", "glover", "glover_rlt", "glover_prlt")
+			"""
+			print("current(size,density) = ("+str(i)+","+str(j)+")")
 			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="std", size=i, den=j)
 			data.append(dict)
 			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover", size=i, den=j)
 			data.append(dict)
-			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_ext", size=i, den=j)
+			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_rlt", size=i, den=j)
 			data.append(dict)
+			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_prlt", size=i, den=j)
+			data.append(dict)
+
 			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="std", size=i, den=j)
 			data.append(dict)
 			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover", size=i, den=j)
 			data.append(dict)
-			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_ext", size=i, den=j)
+			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_rlt", size=i, den=j)
 			data.append(dict)
-			print("(i,j) = ("+str(i)+","+str(j)+")")
+			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_prlt", size=i, den=j)
+			data.append(dict)
+
 
 	df = pd.DataFrame(data)
 	df = df[["solver", "type", "method", "size", "density", "avg_gap", "avg_solve_time", "std_dev", "avg_obj_val"]]  #reorder columns
@@ -142,50 +157,6 @@ if __name__=="__main__":
 	print("took " + str(end-start) + " seconds to run all trials")
 
 
-
-
-# if False:
-# 	knap = Knapsack()
-# 	knap.print_info()
-#
-# 	CPLEX TESTS
-# 	m = cplex.standard_linearization(knap)[0]
-# 	m.solve()
-# 	print(m.objective_value)
-#
-# 	m = cplex.glovers_linearization(knap)[0]
-# 	m.solve()
-# 	print(m.objective_value)
-#
-# 	m = cplex.reformulate_glover(knap)[0]
-# 	m.solve()
-# 	print(m.objective_value)
-#
-# 	m = cplex.glovers_linearization_ext(knap)[0]
-# 	m.solve()
-# 	print(m.objective_value)
-#
-# 	GUROBI TESTS
-# 	m = gurobi.standard_linearization(knap)[0]
-# 	m.setParam('OutputFlag',0)
-# 	m.optimize();
-# 	print(m.objVal)
-#
-# 	m = gurobi.glovers_linearization(knap)[0]
-# 	m.setParam('OutputFlag',0)
-# 	m.optimize()
-# 	print(m.objVal)
-#
-# 	m = gurobi.reformulate_glover(knap)[0]
-# 	m.setParam('OutputFlag',0)
-# 	m.optimize()
-# 	print(m.objVal)
-#
-# 	m = gurobi.glovers_linearization_ext(knap)[0]
-# 	m.setParam('OutputFlag',0)
-# 	m.optimize()
-# 	print(m.objVal)
-
-	# FOR BATCH FILE
-	# if(len(sys.argv)==5): #batch file will go through here
-	# run_trials(trials=5,type=sys.argv[1],method=sys.argv[2],den=int(sys.argv[3]),size=int(sys.argv[4]))
+# FOR BATCH FILE
+# if(len(sys.argv)==5): #batch file will go through here
+# run_trials(trials=5,type=sys.argv[1],method=sys.argv[2],den=int(sys.argv[3]),size=int(sys.argv[4]))
