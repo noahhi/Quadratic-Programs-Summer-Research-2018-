@@ -6,83 +6,186 @@ import time
 import pandas as pd
 from timeit import default_timer as timer
 
-if(len(sys.argv)==5): #batch file will go through here
-	run_trials(trials=5,type=sys.argv[1],method=sys.argv[2],den=int(sys.argv[3]),size=int(sys.argv[4]))
-elif __name__=="__main__":
-	if True:
-		start = timer()
-		num_trials = 2
-		data = []
-		for i in range(4,5): #i*10 gives sizes
-			for j in range(1): #100-(j*10) gives densities
-				dict = cplex.run_trials(trials=num_trials, type="QKP", method="std", size=10*i, den=100-(j*10))
-				data.append(dict)
-				dict = cplex.run_trials(trials=num_trials, type="QKP", method="glover", size=10*i, den=100-(j*10))
-				data.append(dict)
-				dict = cplex.run_trials(trials=num_trials, type="QKP", method="glover_ext", size=10*i, den=100-(j*10))
-				data.append(dict)
-				dict = gurobi.run_trials(trials=num_trials, type="QKP", method="std", size=10*i, den=100-(j*10))
-				data.append(dict)
-				dict = gurobi.run_trials(trials=num_trials, type="QKP", method="glover", size=10*i, den=100-(j*10))
-				data.append(dict)
-				dict = gurobi.run_trials(trials=num_trials, type="QKP", method="glover_ext", size=10*i, den=100-(j*10))
-				data.append(dict)
-				dict = gurobi.run_trials(trials=num_trials, type="QKP", method="prlt", size=10*i, den=100-(j*10))
-				data.append(dict)
-				print("(i,j) = ("+str(i)+","+str(j)+")")
 
-		df = pd.DataFrame(data)
-		df = df[["solver", "type", "method", "size", "density", "avg_gap", "avg_solve_time", "std_dev", "avg_obj_val"]]  #reorder columns
-		print(df)
+def run_trials(trials=10,solver="cplex",type="QKP",method="std",size=5,den=100, options=0):
+	#keep track of total run time across all trials to compute avg later
+	total_time, total_gap, total_obj = 0, 0, 0
+	#need individual run time to compute standard deviation
+	run_times = []
 
-		time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
-		excel_filename = "reports/"+time_stamp+'-report.xlsx'
-		writer = pd.ExcelWriter(excel_filename, engine='xlsxwriter')
-		df.to_excel(writer, index=False)
-		#df_footer.to_excel(writer, startrow=6, index=False) - to put multiple dataframes to same excel file
-		writer.save()
+	#write data to log file with descriptive name
+	description = type+"-"+str(method)+"-"+str(size)+"-"+str(den)
+	filename = "log/"+description+".txt"
+	seperator = "=============================================\n"
 
-		end = timer()
-		print("took " + str(end-start) + " seconds")
+	with open(filename, "w") as f:
+		#header information
+		f.write(seperator)
+		f.write("Solver: " + str(solver) +"\n")
+		f.write("Problem Type: " + str(type) +"\n")
+		f.write("Method: " + method+"\n")
+		f.write("nSize: " + str(size) +"\n")
+		f.write("Density: " + str(den) +"\n")
+		f.write("Trials: " + str(trials) +"\n")
+		f.write(seperator+"\n\n")
 
-if False:
-	knap = Knapsack()
-	knap.print_info()
+		for i in range(trials):
+			f.write("Iteration "+str(i+1)+"\n")
 
-	#CPLEX TESTS
-	# m = cplex.standard_linearization(knap)[0]
-	# m.solve()
-	# print(m.objective_value)
-	#
-	# m = cplex.glovers_linearization(knap)[0]
-	# m.solve()
-	# print(m.objective_value)
-	#
-	# m = cplex.reformulate_glover(knap)[0]
-	# m.solve()
-	# print(m.objective_value)
-	#
-	# m = cplex.glovers_linearization_ext(knap)[0]
-	# m.solve()
-	# print(m.objective_value)
+			#generate problem instance
+			if type=="QKP":
+				quad = Knapsack(seed=i, n=size, density=den)
+			elif type=="KQKP":
+				quad = Knapsack(seed=i, n=size, k_item=True, density=den)
+			elif type=="HSP":
+				quad = HSP(seed=i, n=size, density=den)
+			elif type=="UQP":
+				quad = UQP(seed=i, n=size, density=den)
+			else:
+				raise Exception(str(type) + " is not a valid problem type")
 
-	#GUROBI TESTS
-	m = gurobi.standard_linearization(knap)[0]
-	m.setParam('OutputFlag',0)
-	m.optimize();
-	print(m.objVal)
+			#model problem with given solver/method
+			if(solver=="cplex"):
+				if method=="std":
+					m = cplex.standard_linearization(quad)
+				elif method=="glover":
+					m = cplex.glovers_linearization(quad)
+				elif method =="prlt":
+					m = cplex.reformulate_glover(quad)
+				elif method=="glover_ext":
+					m = cplex.glovers_linearization_ext(quad)
+				else:
+					raise Exception(str(method) + " is not a valid method type")
+				results = cplex.solve_model(m[0])
+			elif(solver=="gurobi"):
+				if method=="std":
+					m = gurobi.standard_linearization(quad)
+				elif method=="glover":
+					m = gurobi.glovers_linearization(quad)
+				elif method =="prlt":
+					m = gurobi.reformulate_glover(quad)
+				elif method=="glover_ext":
+					m = gurobi.glovers_linearization_rlt(quad)
+				else:
+					raise Exception(str(method) + " is not a valid method type")
+				results = gurobi.solve_model(m[0])
+			else:
+				raise Exception(str(solver) + "is not a valid solver type")
 
-	m = gurobi.glovers_linearization(knap)[0]
-	m.setParam('OutputFlag',0)
-	m.optimize()
-	print(m.objVal)
+			#retrieve setup time from modeling process and results from solve
+			setup_time = m[1]
+			solve_time = results.get("solve_time")
+			obj_val = results.get("objective_value")
+			int_gap = results.get("integrality_gap")
+			relax = results.get("relaxed_solution")
+			instance_time = setup_time+solve_time
 
-	m = gurobi.reformulate_glover(knap)[0]
-	m.setParam('OutputFlag',0)
-	m.optimize()
-	print(m.objVal)
+			#running totals across trials
+			run_times.append(instance_time)
+			total_time += instance_time
+			total_obj += obj_val
+			total_gap += int_gap
 
-	m = gurobi.glovers_linearization_ext(knap)[0]
-	m.setParam('OutputFlag',0)
-	m.optimize()
-	print(m.objVal)
+			f.write("Integer Solution: " + str(obj_val)+"\n")
+			f.write("Continuous Solution: " + str(relax)+"\n")
+			f.write("Integrality Gap: " + str(int_gap)+"\n")
+			f.write("Setup Time: " + str(setup_time)+"\n")
+			f.write("Solve Time: " + str(solve_time)+"\n")
+			f.write("Instance Total Time (Setup+Solve): " + str(instance_time)+"\n")
+			f.write("=============================================\n")
+
+		results = {"solver":solver, "type":type, "method":method, "size":size, "density":den, "avg_gap":total_gap/trials,
+					"avg_solve_time":total_time/trials, "std_dev":np.std(run_times), "avg_obj_val":total_obj/trials}
+
+		#print summary by iterating thru results dict
+		f.write("\n\nSummary Statistics\n")
+		f.write("=============================================\n")
+		f.write("Total solve time: " + str(total_time)+"\n")
+		f.write("Average Solve Time: " + str(total_time/trials)+"\n")
+		f.write("Solve Time Standard Deviation: " + str(np.std(run_times))+"\n")
+		f.write("Average Integrality Gap: " + str(total_gap/trials)+"\n")
+
+		return results
+
+if __name__=="__main__":
+	start = timer()
+	num_trials = 2
+	sizes = [10, 15]
+	densities = [100]
+	data = []
+	for i in sizes:
+		for j in densities:
+			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="std", size=i, den=j)
+			data.append(dict)
+			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover", size=i, den=j)
+			data.append(dict)
+			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_ext", size=i, den=j)
+			data.append(dict)
+			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="std", size=i, den=j)
+			data.append(dict)
+			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover", size=i, den=j)
+			data.append(dict)
+			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_ext", size=i, den=j)
+			data.append(dict)
+			print("(i,j) = ("+str(i)+","+str(j)+")")
+
+	df = pd.DataFrame(data)
+	df = df[["solver", "type", "method", "size", "density", "avg_gap", "avg_solve_time", "std_dev", "avg_obj_val"]]  #reorder columns
+	print(df)
+
+	time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
+	excel_filename = "reports/"+time_stamp+'-report.xlsx'
+	writer = pd.ExcelWriter(excel_filename, engine='xlsxwriter')
+	df.to_excel(writer, index=False)
+	writer.save()
+	end = timer()
+	print("took " + str(end-start) + " seconds to run all trials")
+
+
+
+
+# if False:
+# 	knap = Knapsack()
+# 	knap.print_info()
+#
+# 	CPLEX TESTS
+# 	m = cplex.standard_linearization(knap)[0]
+# 	m.solve()
+# 	print(m.objective_value)
+#
+# 	m = cplex.glovers_linearization(knap)[0]
+# 	m.solve()
+# 	print(m.objective_value)
+#
+# 	m = cplex.reformulate_glover(knap)[0]
+# 	m.solve()
+# 	print(m.objective_value)
+#
+# 	m = cplex.glovers_linearization_ext(knap)[0]
+# 	m.solve()
+# 	print(m.objective_value)
+#
+# 	GUROBI TESTS
+# 	m = gurobi.standard_linearization(knap)[0]
+# 	m.setParam('OutputFlag',0)
+# 	m.optimize();
+# 	print(m.objVal)
+#
+# 	m = gurobi.glovers_linearization(knap)[0]
+# 	m.setParam('OutputFlag',0)
+# 	m.optimize()
+# 	print(m.objVal)
+#
+# 	m = gurobi.reformulate_glover(knap)[0]
+# 	m.setParam('OutputFlag',0)
+# 	m.optimize()
+# 	print(m.objVal)
+#
+# 	m = gurobi.glovers_linearization_ext(knap)[0]
+# 	m.setParam('OutputFlag',0)
+# 	m.optimize()
+# 	print(m.objVal)
+
+	# FOR BATCH FILE
+	# if(len(sys.argv)==5): #batch file will go through here
+	# run_trials(trials=5,type=sys.argv[1],method=sys.argv[2],den=int(sys.argv[3]),size=int(sys.argv[4]))

@@ -403,24 +403,25 @@ def reformulate_glover(quad):
 	setup_time = end-start
 	return [new_m, setup_time]
 
-def solve_model(m, n): #TODO make it so dont need n as param
-	#start timer and solve model
-	start = timer()
-	assert m.solve(), "solve failed"
-	end = timer()
-	solve_time = end-start
-	objective_value = m.objective_value
-	#TODO something funky going on here with duals. glover_Ext should minimize int_gap but it isnt!?
-	#compute continuous relaxation and integrality_gap
-	for i in range(n):
-		relaxation_var = m.get_var_by_name("binary_var_"+str(i))
-		m.set_var_type(relaxation_var,m.continuous_vartype)
-	assert m.solve(), "solve failed"
-	continuous_obj_value = m.objective_value
+def solve_model(model):
+	#use with block to automatically call m.end() when finished
+	with model as m:
+		start = timer()
+		assert m.solve(), "solve failed"
+		end = timer()
+		solve_time = end-start
+		objective_value = m.objective_value
+
+		#compute continuous relaxation and integrality_gap
+		i = 0
+		while m.get_var_by_name("binary_var_"+str(i)) is not None:
+			relaxation_var = m.get_var_by_name("binary_var_"+str(i))
+			m.set_var_type(relaxation_var,m.continuous_vartype)
+			i+=1
+
+		assert m.solve(), "solve failed"
+		continuous_obj_value = m.objective_value
 	integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
-	#terminate model
-	#TODO: could use with, then wouldn't need to manually call .end()
-	m.end()
 
 	#create and return results dictionary
 	results = {"solve_time":solve_time,
@@ -429,90 +430,11 @@ def solve_model(m, n): #TODO make it so dont need n as param
 				"integrality_gap":integrality_gap}
 	return results
 
-def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
-	#keep track of total run time across all trials to compute avg later
-	total_time, total_gap, total_obj = 0, 0, 0
-	#need individual run time to compute standard deviation
-	run_times = []
-
-	#write data to log file with descriptive name
-	description = type+"-"+str(method)+"-"+str(size)+"-"+str(den)
-	filename = "log/"+description+".txt"
-	seperator = "=============================================\n"
-
-	with open(filename, "w") as f:
-		#header information
-		f.write(seperator)
-		f.write("Trials: " + str(trials) +"\n")
-		f.write("Problem Type: " + str(type) +"\n")
-		f.write("Method: " + method+"\n")
-		f.write("nSize: " + str(size) +"\n")
-		f.write("Density: " + str(den) +"\n")
-		f.write(seperator+"\n\n")
-
-		for i in range(trials):
-			f.write("Iteration "+str(i+1)+"\n")
-
-			#create new instance of desired problem type
-			#TODO seeds should vary based on parameters
-			if type=="QKP":
-				quad = Knapsack(seed=i, n=size, density=den)
-			elif type=="KQKP":
-				quad = Knapsack(seed=i, n=size, k_item=True, density=den)
-			elif type=="HSP":
-				quad = HSP(seed=i, n=size, density=den)
-			elif type=="UQP":
-				quad = UQP(seed=i, n=size, density=den)
-			else:
-				raise Exception(type + " is not a valid problem type")
-
-			#model using desired modeling method
-			if method=="std":
-				#model is m[0], model setup time is m[1]
-				m = standard_linearization(quad)
-			elif method=="glover":
-				m = glovers_linearization(quad)
-			elif method =="prlt":
-				m = reformulate_glover(quad)
-			elif method=="glover_ext":
-				m = glovers_linearization_ext(quad)
-			else:
-				raise Exception(method + " is not a valid method type")
-
-			#retrieve setup time from modeling process
-			setup_time = m[1]
-			#solve model and calculate instance solve time
-			results = solve_model(m[0], quad.n)
-			solve_time = results.get("solve_time")
-			instance_time = setup_time+solve_time
-			total_time += instance_time
-			run_times.append(instance_time)
-			total_obj += results.get("objective_value")
-			#TODO: could make this a for loop using "for key,val in results.items() - order may vary
-			total_gap += results.get("integrality_gap")
-			f.write("Integer Solution: " + str(results.get("objective_value"))+"\n")
-			f.write("Continuous Solution: " + str(results.get("relaxed_solution"))+"\n")
-			f.write("Setup Time: " + str(setup_time)+"\n")
-			f.write("Solve Time: " + str(solve_time)+"\n")
-			f.write("Instance Total Time (Setup+Solve): " + str(instance_time)+"\n")
-			f.write("=============================================\n")
-
-		#df.loc[count] = [description, str(total_time/trials), str(np.std(run_times))]
-		results = {"solver":"cplex", "type":type, "method":method, "size":size, "density":den, "avg_gap":total_gap/trials,
-					"avg_solve_time":total_time/trials, "std_dev":np.std(run_times), "avg_obj_val":total_obj/trials}
-
-		#print summary by iterating thru results dict
-		f.write("\n\nSummary Statistics\n")
-		f.write("=============================================\n")
-		f.write("Average Integrality Gap: " + str(total_gap/trials)+"\n")
-		f.write("Total solve time: " + str(total_time)+"\n")
-		f.write("Average Solve Time: " + str(total_time/trials)+"\n")
-		f.write("Standard Deviation: " + str(np.std(run_times))+"\n")
-
-		return results
-
-# knap = Knapsack()
-# m = standard_linearization(knap)[0]
+knap = Knapsack(n=30)
+m = glovers_linearization_ext(knap)[0]
+r = solve_model(m)
+print(r.get("objective_value"))
+print(r.get("relaxed_solution"))
 # m.solve()
 # print(m.get_solve_details().best_bound)
 # print(m.get_solve_details().mip_relative_gap)
@@ -521,3 +443,6 @@ def run_trials(trials=10,type="QKP",method="std",size=5,den=100):
 #m.solve()
 #print(m.get_solve_details().best_bound)
 #print(m.objective_value)
+
+
+#TODO something funky going on here (with duals?). glover_Ext should minimize int_gap but it isnt!?
