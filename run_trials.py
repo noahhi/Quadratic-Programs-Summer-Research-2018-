@@ -18,7 +18,7 @@ def run_trials(trials=5,solver="cplex",type="QKP",method="std",size=5,den=100, o
 	run_times = []
 
 	#write data to log file with descriptive name
-	description = type+"-"+str(method)+"-"+str(size)+"-"+str(den)
+	description = solver+"-"+type+"-"+str(method)+"-"+str(size)+"-"+str(den)
 	filename = "log/"+description+".txt"
 	seperator = "=============================================\n"
 
@@ -51,9 +51,17 @@ def run_trials(trials=5,solver="cplex",type="QKP",method="std",size=5,den=100, o
 			#model problem with given solver/method
 			if(solver=="cplex"):
 				if method=="std":
-					m = cplex.standard_linearization(quad)
+					if options==0:
+						m = cplex.standard_linearization(quad)
+					elif options==1:
+						m = cplex.standard_linearization(quad, con3=False, con4=False)
+					elif options==2:
+						m = cplex.standard_linearization(quad, con1=False, con2=False)
 				elif method=="glover":
-					m = cplex.glovers_linearization(quad)
+					if options==0:
+						m = cplex.glovers_linearization(quad, bounds="tight")
+					elif options==1:
+						m = cplex.glovers_linearization(quad, bounds="original")
 				elif method=="glover_rlt":
 					m = cplex.glovers_linearization_rlt(quad)
 				elif method=="glover_prlt":
@@ -63,9 +71,17 @@ def run_trials(trials=5,solver="cplex",type="QKP",method="std",size=5,den=100, o
 				results = cplex.solve_model(m[0])
 			elif(solver=="gurobi"):
 				if method=="std":
-					m = gurobi.standard_linearization(quad)
+					if options==0:
+						m = gurobi.standard_linearization(quad)
+					elif options==1:
+						m = gurobi.standard_linearization(quad, con3=False, con4=False)
+					elif options==2:
+						m = gurobi.standard_linearization(quad, con1=False, con2=False)
 				elif method=="glover":
-					m = gurobi.glovers_linearization(quad)
+					if options==0:
+						m = gurobi.glovers_linearization(quad, bounds="tight")
+					elif options==1:
+						m = gurobi.glovers_linearization(quad, bounds="original")
 				elif method=="glover_rlt":
 					m = gurobi.glovers_linearization_rlt(quad)
 				elif method=="glover_prlt":
@@ -98,7 +114,7 @@ def run_trials(trials=5,solver="cplex",type="QKP",method="std",size=5,den=100, o
 			f.write("Instance Total Time (Setup+Solve): " + str(instance_time)+"\n")
 			f.write("=============================================\n")
 
-		results = {"solver":solver, "type":type, "method":method, "size":size, "density":den, "avg_gap":total_gap/trials,
+		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":total_gap/trials,
 					"avg_solve_time":total_time/trials, "std_dev":np.std(run_times), "avg_obj_val":total_obj/trials}
 
 		#print summary by iterating thru results dict
@@ -113,8 +129,8 @@ def run_trials(trials=5,solver="cplex",type="QKP",method="std",size=5,den=100, o
 
 if __name__=="__main__":
 	start = timer()
-	num_trials = 2
-	sizes = [10, 15]
+	num_trials = 1
+	sizes = [15]
 	densities = [100]
 	data = []
 	for i in sizes:
@@ -123,29 +139,32 @@ if __name__=="__main__":
 			solver = solver to use ("cplex", "gurobi")
 			type = problem type ("QKP", "KQKP", "UQP", "HSP")
 			method = linearization technique ("std", "glover", "glover_rlt", "glover_prlt")
+			options = specify alternative/optional constraints specific to each linearization
 			"""
 			print("current(size,density) = ("+str(i)+","+str(j)+")")
-			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="std", size=i, den=j)
+			dict = run_trials(trials=num_trials, solver="cplex", type="HSP", method="std", size=i, den=j)
 			data.append(dict)
-			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover", size=i, den=j)
-			data.append(dict)
-			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_rlt", size=i, den=j)
-			data.append(dict)
-			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_prlt", size=i, den=j)
-			data.append(dict)
-
-			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="std", size=i, den=j)
-			data.append(dict)
-			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover", size=i, den=j)
-			data.append(dict)
-			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_rlt", size=i, den=j)
-			data.append(dict)
-			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_prlt", size=i, den=j)
-			data.append(dict)
+			# dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="std", size=i, den=j, options=1)
+			# data.append(dict)
+			# dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover", size=i, den=j)
+			# data.append(dict)
+			# dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_rlt", size=i, den=j)
+			# data.append(dict)
+			# dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_prlt", size=i, den=j)
+			# data.append(dict)
+			# #
+			# dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="std", size=i, den=j)
+			# data.append(dict)
+			# dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover", size=i, den=j)
+			# data.append(dict)
+			# dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_rlt", size=i, den=j)
+			# data.append(dict)
+			# dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_prlt", size=i, den=j)
+			# data.append(dict)
 
 
 	df = pd.DataFrame(data)
-	df = df[["solver", "type", "method", "size", "density", "avg_gap", "avg_solve_time", "std_dev", "avg_obj_val"]]  #reorder columns
+	df = df[["solver", "type", "method","options", "size", "density", "avg_gap", "avg_solve_time", "std_dev", "avg_obj_val"]]  #reorder columns
 	print(df)
 
 	time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")

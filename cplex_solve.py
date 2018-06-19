@@ -94,10 +94,14 @@ def glovers_linearization(quad, bounds="tight", constraints="original"):
 		l_bound_m = Model(name='lower_bound_model')
 		u_bound_x = u_bound_m.continuous_var_list(n, ub=1)
 		l_bound_x = l_bound_m.continuous_var_list(n, ub=1)
-		for k in range(quad.m):
-			#TODO this gives errors for HSP and UQP
-			u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
-			l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+		if type(m) is Knapsack:
+			for k in range(quad.m):
+				#TODO add k_item constraints here?
+				u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+				l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+		elif type(quad) is HSP:
+			u_bound_m.add_constraint(u_bound_m.sum(x[i] for i in range(n)) == quad.num_items)
+			l_bound_m.add_constraint(l_bound_m.sum(x[i] for i in range(n)) == quad.num_items)
 		for j in range(n):
 			u_bound_m.set_objective(sense="max", expr=u_bound_m.sum(C[i,j]*u_bound_x[i] for i in range(n)))
 			l_bound_m.set_objective(sense="min", expr=l_bound_m.sum(C[i,j]*l_bound_x[i] for i in range(n)))
@@ -158,8 +162,15 @@ def glovers_linearization_prlt(quad):
 		w = m.continuous_var_matrix(keys1=n, keys2=n)
 
 		#add capacity constraint
-		for k in range(quad.m):
-			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+		if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+			#add capacity constraint(s)
+			for k in range(quad.m):
+				m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+			#k_item constraint(s) if necessary (if KQKP)
+			for k in range(len(quad.num_items)):
+				m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items[k])
+		elif type(quad) is HSP:
+			m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
 
 		#add auxiliary constraints
 		for i in range(n):
@@ -218,9 +229,15 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 		w = m.continuous_var_matrix(keys1=n, keys2=n)
 		y = m.continuous_var_matrix(keys1=n, keys2=n)
 
-		#add capacity constraint(s)
-		for k in range(quad.m):
-			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+		if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+			#add capacity constraint(s)
+			for k in range(quad.m):
+				m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+			#k_item constraint(s) if necessary
+			for k in range(len(quad.num_items)):
+				m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items[k])
+		elif type(quad) is HSP:
+			m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
 
 		#add auxiliary constraints
 		for i in range(n):
@@ -310,9 +327,15 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	m = Model(name='glovers_linearization_rlt_'+bounds+'_'+constraints)
 	x = m.binary_var_list(n, name="binary_var")
 
-	#add capacity constraint(s)
-	for k in range(quad.m):
-		m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+		#k_item constraint(s) if necessary
+		for k in range(len(quad.num_items)):
+			m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items[k])
+	elif type(quad) is HSP:
+		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
 
 	#determine bounds for each column of C
 	U1 = np.zeros(n)
@@ -433,3 +456,9 @@ def solve_model(model):
 
 
 #TODO something funky going on here (with duals?). glover_rlt should minimize int_gap but it isnt!?
+
+hsp = UQP(n=8)
+hsp.print_info(print_C = True)
+m = standard_linearization(hsp)[0]
+r = solve_model(m)
+print(r.get("objective_value"))
