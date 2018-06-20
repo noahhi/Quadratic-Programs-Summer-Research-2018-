@@ -93,9 +93,18 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	L1 = np.zeros(n)
 	if(bounds=="original"):
 		for j in range(n):
-			col = C[:,j]
-			#U[j] = np.sum(col[col>0])
-			#L[j] = np.sum(col[col<0])
+			col = C[:, j]
+			pos_take_vals = col > 0
+			pos_take_vals[j] = True
+			U1[j] = np.sum(col[pos_take_vals])
+			neg_take_vals = col < 0
+			neg_take_vals[j] = False
+			L0[j] = np.sum(col[neg_take_vals])
+			if lhs_constraints:
+				pos_take_vals[j] = False
+				U0[j] = np.sum(col[pos_take_vals])
+				neg_take_vals[j] = True
+				L1[j] = np.sum(col[neg_take_vals])
 	elif(bounds=="tight"):
 		u_bound_m = Model(name='upper_bound_model')
 		l_bound_m = Model(name='lower_bound_model')

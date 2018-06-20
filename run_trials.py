@@ -174,6 +174,7 @@ if __name__=="__main__":
 			# data.append(dict)
 
 	#TODO add to df more often/ not just once at the end
+	#TODO include setup time in here. more complete picture than just avg solve time 
 	df = pd.DataFrame(data)
 	df = df[["solver", "type", "symmetric", "method","options", "size", "density", "avg_gap", "avg_solve_time", "std_dev", "avg_obj_val"]]  #reorder columns
 	print(df)
