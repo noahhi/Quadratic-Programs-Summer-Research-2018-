@@ -58,13 +58,19 @@ def standard_linearization(quad, con1=True, con2=True, con3=True, con4=True):
 	#return model + setup time
 	return [m, setup_time]
 
-def glovers_linearization(quad, bounds="tight", constraints="original"):
+def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=True, use_diagonal=False):
 	start = timer()
 	n = quad.n
 	c = quad.c
 	C = quad.C
 	a = quad.a
 	b = quad.b
+
+	#put linear terms along diagonal of quadratic matrix. set linear terms to zero
+	if use_diagonal:
+		for i in range(n):
+			C[i,i] = c[i]
+			c[i] = 0
 
 	#create model and add variables
 	m = Model(name='glovers_linearization_'+bounds+'_'+constraints)
@@ -81,13 +87,15 @@ def glovers_linearization(quad, bounds="tight", constraints="original"):
 		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
 
 	#determine bounds for each column of C
-	U = np.zeros(n)
-	L = np.zeros(n)
+	U1 = np.zeros(n)
+	L0 = np.zeros(n)
+	U0 = np.zeros(n)
+	L1 = np.zeros(n)
 	if(bounds=="original"):
 		for j in range(n):
 			col = C[:,j]
-			U[j] = np.sum(col[col>0])
-			L[j] = np.sum(col[col<0])
+			#U[j] = np.sum(col[col>0])
+			#L[j] = np.sum(col[col<0])
 	elif(bounds=="tight"):
 		u_bound_m = Model(name='upper_bound_model')
 		l_bound_m = Model(name='lower_bound_model')
@@ -110,17 +118,30 @@ def glovers_linearization(quad, bounds="tight", constraints="original"):
 			l_bound_m.solve()
 			u_bound_m.remove_constraint(u_con)
 			l_bound_m.remove_constraint(l_con)
-			U[j] = u_bound_m.objective_value
-			L[j] = l_bound_m.objective_value
+			U1[j] = u_bound_m.objective_value
+			L0[j] = l_bound_m.objective_value
+			if lhs_constraints:
+				u_con = u_bound_m.add_constraint(u_bound_x[j] == 0)
+				l_con = l_bound_m.add_constraint(l_bound_x[j] == 1)
+				u_bound_m.solve()
+				l_bound_m.solve()
+				U0[j] = u_bound_m.objective_value
+				L1[j] = l_bound_m.objective_value
+				u_bound_m.remove_constraint(u_con)
+				l_bound_m.remove_constraint(l_con)
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
 	#add auxiliary constrains
 	if(constraints=="original"):
 		z = m.continuous_var_list(keys=n,lb=-m.infinity)
-		m.add_constraints(z[j] <= U[j]*x[j] for j in range(n))
+		m.add_constraints(z[j] <= U1[j]*x[j] for j in range(n))
+		if lhs_constraints:
+			m.add_constraints(z[j] >= L1[j]*x[j] for j in range(n))
 		for j in range(n):
 			tempsum = sum(C[i,j]*x[i] for i in range(n))
-			m.add_constraint(z[j] <= tempsum - L[j]*(1-x[j]))
+			m.add_constraint(z[j] <= tempsum - L0[j]*(1-x[j]))
+			if lhs_constraints:
+				m.add_constraint(z[j] >= tempsum - U0[j]*(1-x[j]))
 		if type(quad) is HSP:
 			m.maximize(m.sum(z[j] for j in range(n)))
 		else:
@@ -470,20 +491,3 @@ def no_linearization():
 	m.maximize(linear_values + quadratic_values)
 	m.solve()
 	print(m.objective_value)
-
-
-
-
-
-
-
-
-#TODO something funky going on here (with duals?). glover_rlt should minimize int_gap but it isnt!?
-
-# knap = Knapsack(35)
-# #knap.print_info(print_C=True)
-# m = glovers_linearization_rlt(knap)[0]
-# r = solve_model(m)
-# print(r.get("objective_value"))
-# print(r.get("relaxed_solution"))
-# print(r.get("integrality_gap"))

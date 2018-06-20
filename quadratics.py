@@ -41,7 +41,7 @@ class Quadratic: #base class for all quadratic problem types
 		print("")
 
 class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
-	def __init__(self, seed=0, n=10, m=1, density=100, symmetric=True, k_item=False):
+	def __init__(self, seed=0, n=10, m=1, density=100, symmetric=False, k_item=False):
 		super().__init__(seed_=seed, n_=n, m_=m, density_=density, symmetric_=symmetric, k_item_=k_item)
 
 		#item weights
