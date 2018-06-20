@@ -70,7 +70,6 @@ def glovers_linearization(quad, bounds="tight", constraints="original"):
 	m = Model(name='glovers_linearization_'+bounds+'_'+constraints)
 	x = m.binary_var_list(n, name="binary_var")
 
-
 	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
 		#add capacity constraint(s)
 		for k in range(quad.m):
@@ -92,9 +91,9 @@ def glovers_linearization(quad, bounds="tight", constraints="original"):
 	elif(bounds=="tight"):
 		u_bound_m = Model(name='upper_bound_model')
 		l_bound_m = Model(name='lower_bound_model')
-		u_bound_x = u_bound_m.continuous_var_list(n, ub=1)
-		l_bound_x = l_bound_m.continuous_var_list(n, ub=1)
-		if type(m) is Knapsack:
+		u_bound_x = u_bound_m.continuous_var_list(n, ub=1, lb=0)
+		l_bound_x = l_bound_m.continuous_var_list(n, ub=1, lb=0)
+		if type(quad) is Knapsack:
 			for k in range(quad.m):
 				#TODO add k_item constraints here?
 				u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
@@ -115,7 +114,6 @@ def glovers_linearization(quad, bounds="tight", constraints="original"):
 			L[j] = l_bound_m.objective_value
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
-
 	#add auxiliary constrains
 	if(constraints=="original"):
 		z = m.continuous_var_list(keys=n,lb=-m.infinity)
@@ -286,6 +284,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	#model with rlt1, solve continuous relax and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
 	m.solve()
+	#print(m.objective_value)
 	duals16 = np.zeros((n,n))
 	duals17 = np.zeros((n,n))
 	for i in range(n):
@@ -300,6 +299,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 
 	D = np.zeros((n,n))
 	E = np.zeros((n,n))
+
 	#optimal split, found using dual vars from rlt1 continuous relaxation
 	for i in range(n):
 		for j in range(n):
@@ -311,6 +311,8 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 				D[i,j] = C[i,j]+duals16[j,i]-duals17[i,j]
 	E = -duals17
 
+	#print(D)
+	#print(E)
 	#update linear values as well
 	for j in range(n):
 		c[j] = c[j] + sum(duals17[j,i] for i in range(n))
@@ -354,15 +356,15 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	elif(bounds=="tight"):
 		u_bound_m1 = Model(name='upper_bound_model1')
 		l_bound_m1 = Model(name='lower_bound_model1')
-		u_bound_x1 = u_bound_m1.continuous_var_list(n, ub=1)
-		l_bound_x1 = l_bound_m1.continuous_var_list(n, ub=1)
+		u_bound_x1 = u_bound_m1.continuous_var_list(n, ub=1, lb=0)
+		l_bound_x1 = l_bound_m1.continuous_var_list(n, ub=1, lb=0)
 		for k in range(quad.m):
 			u_bound_m1.add_constraint(u_bound_m1.sum(u_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
 			l_bound_m1.add_constraint(l_bound_m1.sum(l_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
 		u_bound_m2 = Model(name='upper_bound_model2')
 		l_bound_m2 = Model(name='lower_bound_model2')
-		u_bound_x2 = u_bound_m2.continuous_var_list(n, ub=1)
-		l_bound_x2 = l_bound_m2.continuous_var_list(n, ub=1)
+		u_bound_x2 = u_bound_m2.continuous_var_list(n, ub=1, lb=0)
+		l_bound_x2 = l_bound_m2.continuous_var_list(n, ub=1, lb=0)
 		for k in range(quad.m):
 			u_bound_m2.add_constraint(u_bound_m2.sum(u_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
 			l_bound_m2.add_constraint(l_bound_m2.sum(l_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
@@ -454,11 +456,34 @@ def solve_model(model):
 				"integrality_gap":integrality_gap}
 	return results
 
+def no_linearization():
+	knap = Knapsack()
+	m = Model(name='quad')
+	x = m.binary_var_list(knap.n, name="binary_var")
+	for k in range(knap.m):
+		m.add_constraint(sum(x[i]*knap.a[k][i] for i in range(knap.n)) <= knap.b[k])
+	linear_values = sum(x[i]*knap.c[i] for i in range(knap.n))
+	quadratic_values = 0
+	for i in range(knap.n):
+		for j in range(knap.n):
+			quadratic_values = quadratic_values + (x[i]*x[j]*knap.C[i,j])
+	m.maximize(linear_values + quadratic_values)
+	m.solve()
+	print(m.objective_value)
+
+
+
+
+
+
+
 
 #TODO something funky going on here (with duals?). glover_rlt should minimize int_gap but it isnt!?
 
-hsp = UQP(n=8)
-hsp.print_info(print_C = True)
-m = standard_linearization(hsp)[0]
-r = solve_model(m)
-print(r.get("objective_value"))
+# knap = Knapsack(35)
+# #knap.print_info(print_C=True)
+# m = glovers_linearization_rlt(knap)[0]
+# r = solve_model(m)
+# print(r.get("objective_value"))
+# print(r.get("relaxed_solution"))
+# print(r.get("integrality_gap"))

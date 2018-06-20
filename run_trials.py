@@ -129,8 +129,8 @@ def run_trials(trials=5,solver="cplex",type="QKP",method="std",size=5,den=100, o
 
 if __name__=="__main__":
 	start = timer()
-	num_trials = 1
-	sizes = [15]
+	num_trials = 2
+	sizes = [20]
 	densities = [100]
 	data = []
 	for i in sizes:
@@ -142,25 +142,23 @@ if __name__=="__main__":
 			options = specify alternative/optional constraints specific to each linearization
 			"""
 			print("current(size,density) = ("+str(i)+","+str(j)+")")
-			dict = run_trials(trials=num_trials, solver="cplex", type="HSP", method="std", size=i, den=j)
+			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="std", size=i, den=j)
 			data.append(dict)
-			# dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="std", size=i, den=j, options=1)
-			# data.append(dict)
-			# dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover", size=i, den=j)
-			# data.append(dict)
-			# dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_rlt", size=i, den=j)
-			# data.append(dict)
-			# dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_prlt", size=i, den=j)
-			# data.append(dict)
-			# #
-			# dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="std", size=i, den=j)
-			# data.append(dict)
-			# dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover", size=i, den=j)
-			# data.append(dict)
-			# dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_rlt", size=i, den=j)
-			# data.append(dict)
-			# dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_prlt", size=i, den=j)
-			# data.append(dict)
+			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover", size=i, den=j)
+			data.append(dict)
+			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_rlt", size=i, den=j)
+			data.append(dict)
+			dict = run_trials(trials=num_trials, solver="cplex", type="QKP", method="glover_prlt", size=i, den=j)
+			data.append(dict)
+			#
+			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="std", size=i, den=j)
+			data.append(dict)
+			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover", size=i, den=j)
+			data.append(dict)
+			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_rlt", size=i, den=j)
+			data.append(dict)
+			dict = run_trials(trials=num_trials, solver="gurobi", type="QKP", method="glover_prlt", size=i, den=j)
+			data.append(dict)
 
 
 	df = pd.DataFrame(data)
