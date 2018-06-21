@@ -4,6 +4,7 @@ log/
 #ignore excel files
 *.xlsx
 
+
 # Created by https://www.gitignore.io/api/python
 
 ### Python ###

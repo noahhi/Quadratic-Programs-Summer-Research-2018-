@@ -223,10 +223,10 @@ def glovers_linearization_prlt(quad):
 
 		#return model
 		return m
-	n=quad.n
 	start = timer()
 	m = prlt1_linearization(quad)
 	m.solve()
+	n=quad.n
 	duals16 = np.zeros((n,n))
 	for i in range(n):
 		for j in range(i+1,n):

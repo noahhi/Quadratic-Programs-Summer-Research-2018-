@@ -6,8 +6,7 @@ import time
 import pandas as pd
 from timeit import default_timer as timer
 
-
-def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",size=5,den=100, options=0):
+def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",size=5,den=100, options=0,glover_bounds="tight"):
 	"""
 	Runs the same problem type thru given solver with given method repeatedly to get
 	an average solve time
@@ -63,13 +62,13 @@ def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",s
 						m = cplex.standard_linearization(quad, con1=False, con2=False)
 				elif method=="glover":
 					if options==0:
-						m = cplex.glovers_linearization(quad, use_diagonal=False, lhs_constraints=True)
+						m = cplex.glovers_linearization(quad, use_diagonal=False, lhs_constraints=True, bounds=glover_bounds)
 					elif options==1:
-						m = cplex.glovers_linearization(quad, use_diagonal=True, lhs_constraints=True)
+						m = cplex.glovers_linearization(quad, use_diagonal=True, lhs_constraints=True, bounds=glover_bounds)
 					elif options==2:
-						m = cplex.glovers_linearization(quad, use_diagonal=False, lhs_constraints=False)
+						m = cplex.glovers_linearization(quad, use_diagonal=False, lhs_constraints=False, bounds=glover_bounds)
 					elif options==3:
-						m = cplex.glovers_linearization(quad, use_diagonal=True, lhs_constraints=False)
+						m = cplex.glovers_linearization(quad, use_diagonal=True, lhs_constraints=False, bounds=glover_bounds)
 				elif method=="glover_rlt":
 					m = cplex.glovers_linearization_rlt(quad)
 				elif method=="glover_prlt":
@@ -87,9 +86,13 @@ def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",s
 						m = gurobi.standard_linearization(quad, con1=False, con2=False)
 				elif method=="glover":
 					if options==0:
-						m = gurobi.glovers_linearization(quad, use_diagonal=False)
+						m = gurobi.glovers_linearization(quad, use_diagonal=False, lhs_constraints=True)
 					elif options==1:
-						m = gurobi.glovers_linearization(quad, use_diagonal=True)
+						m = gurobi.glovers_linearization(quad, use_diagonal=True, lhs_constraints=True)
+					elif options==2:
+						m = gurobi.glovers_linearization(quad, use_diagonal=False, lhs_constraints=False)
+					elif options==3:
+						m = gurobi.glovers_linearization(quad, use_diagonal=True, lhs_constraints=False)
 				elif method=="glover_rlt":
 					m = gurobi.glovers_linearization_rlt(quad)
 				elif method=="glover_prlt":
@@ -127,7 +130,7 @@ def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",s
 		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":int_gap_sum/trials,
 					"avg_total_time":(setup_time_sum+solve_time_sum)/trials, "std_dev":np.std(instance_total_times),
 					"avg_obj_val":obj_sum/trials, "symmetric": symmetric, "avg_setup_time": setup_time_sum/trials,
-					"avg_solve_time": solve_time_sum/trials}
+					"avg_solve_time": solve_time_sum/trials, "glover_bounds": glover_bounds}
 
 		#print results summary to log file by iterating through results dictionary
 		f.write("\n\nSummary Statistics\n")
@@ -140,9 +143,9 @@ def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",s
 
 if __name__=="__main__":
 	start = timer()
-	num_trials = 1
-	sizes = [15]
-	densities = [100]
+	num_trials = 10
+	sizes = [75, 100]
+	densities = [50, 100]
 	solvers = ["cplex", "gurobi"]
 	data = []
 	for i in sizes:
@@ -156,22 +159,43 @@ if __name__=="__main__":
 				options = specify alternative/optional constraints specific to each linearization
 				"""
 				print("running with current(size,density,solver) = ("+str(i)+","+str(j)+","+solve_with+")...")
-				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=False, method="std", size=i, den=j)
+				dict = run_trials(glover_bounds="original", trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=0)
 				data.append(dict)
-				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="std", size=i, den=j)
+				print('1/8')
+				dict = run_trials(glover_bounds="original", trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=1)
 				data.append(dict)
-				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=False, method="std", size=i, den=j, options=1)
+				print('1/4')
+				dict = run_trials(glover_bounds="original", trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=2)
 				data.append(dict)
-				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="std", size=i, den=j, options=1)
+				print('3/8')
+				dict = run_trials(glover_bounds="original", trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=3)
 				data.append(dict)
+				print('halfway')
+				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=0)
+				data.append(dict)
+				print('5/8')
+				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=1)
+				data.append(dict)
+				print('3/4')
+				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=2)
+				data.append(dict)
+				print('7/8')
+				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=3)
+				data.append(dict)
+				# dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=False, method="std", size=i, den=j, options=1)
+				# data.append(dict)
+				# dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="std", size=i, den=j, options=1)
+				# data.append(dict)
 
 
 	#TODO add to df more often/ not just once at the end
 	#TODO use pickle to save the actual dataframe. Then can retrieve again and continue adding data to it
 	df = pd.DataFrame(data)
-	df = df[["solver", "type", "symmetric", "method","options", "size", "density", "avg_gap",
+	df = df[["solver", "type", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
 			"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
 	print(df)
+	#save datafrane as .pkl (read back using pd.read_pickle())
+	df.to_pickle('dataframe.pkl')
 
 	time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
 	excel_filename = "reports/"+time_stamp+'-report.xlsx'
