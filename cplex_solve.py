@@ -105,11 +105,15 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 				U0[j] = np.sum(col[pos_take_vals])
 				neg_take_vals[j] = True
 				L1[j] = np.sum(col[neg_take_vals])
-	elif(bounds=="tight"):
+	elif(bounds=="tight" or bounds=="tighter"):
 		u_bound_m = Model(name='upper_bound_model')
 		l_bound_m = Model(name='lower_bound_model')
-		u_bound_x = u_bound_m.continuous_var_list(n, ub=1, lb=0)
-		l_bound_x = l_bound_m.continuous_var_list(n, ub=1, lb=0)
+		if bounds == "tight":
+			u_bound_x = u_bound_m.continuous_var_list(n, ub=1, lb=0)
+			l_bound_x = l_bound_m.continuous_var_list(n, ub=1, lb=0)
+		elif bounds == "tighter":
+			u_bound_x = u_bound_m.binary_var_list(n, ub=1, lb=0)
+			l_bound_x = l_bound_m.binary_var_list(n, ub=1, lb=0)
 		if type(quad) is Knapsack:
 			for k in range(quad.m):
 				#TODO add k_item constraints here?
@@ -500,3 +504,14 @@ def no_linearization():
 	m.maximize(linear_values + quadratic_values)
 	m.solve()
 	print(m.objective_value)
+
+# knap = Knapsack()
+# m = glovers_linearization(knap, bounds="tighter")
+# print(m[1])
+# print(solve_model(m[0]))
+# m = glovers_linearization(knap, bounds="tight")
+# print(m[1])
+# print(solve_model(m[0]))
+# m = glovers_linearization(knap, bounds="original")
+# print(m[1])
+# print(solve_model(m[0]))

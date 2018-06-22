@@ -108,14 +108,18 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 				U0[j] = np.sum(col[pos_take_vals])
 				neg_take_vals[j] = True
 				L1[j] = np.sum(col[neg_take_vals])
-	elif(bounds == "tight"):
+	elif(bounds == "tight" or bounds=="tighter"):
 		u_bound_m = Model(name='upper_bound_model')
 		l_bound_m = Model(name='lower_bound_model')
 		#TODO turn off output flag from the start so dont have to call on every new model
 		u_bound_m.setParam('OutputFlag', 0)
 		l_bound_m.setParam('OutputFlag', 0)
-		u_bound_x = u_bound_m.addVars(n, ub=1, lb=0)
-		l_bound_x = l_bound_m.addVars(n, ub=1, lb=0)
+		if bounds=="tight":
+			u_bound_x = u_bound_m.addVars(n, ub=1, lb=0, vtype=GRB.CONTINUOUS)
+			l_bound_x = l_bound_m.addVars(n, ub=1, lb=0, vtype=GRB.CONTINUOUS)
+		elif bounds=="tighter":
+			u_bound_x = u_bound_m.addVars(n, ub=1, lb=0, vtype=GRB.BINARY)
+			l_bound_x = l_bound_m.addVars(n, ub=1, lb=0, vtype=GRB.BINARY)
 		if type(quad) is Knapsack:
 			for k in range(quad.m):
 				u_bound_m.addConstr(sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])

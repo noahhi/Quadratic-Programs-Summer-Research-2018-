@@ -143,49 +143,33 @@ def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",s
 
 if __name__=="__main__":
 	start = timer()
-	num_trials = 10
-	sizes = [75, 100]
-	densities = [50, 100]
+	num_trials = 5
+	sizes = [25,50,75]
+	densities = [100]
 	solvers = ["cplex", "gurobi"]
+	bounds = ["original", "tight", "tighter"]
 	data = []
 	for i in sizes:
 		for j in densities:
 			for solve_with in solvers:
-				#TODO add a for solver in [cplex, gurobi]. for type in [QKP, ...] etc..
-				"""
-				solver = solver to use ("cplex", "gurobi")
-				type = problem type ("QKP", "KQKP", "UQP", "HSP")
-				method = linearization technique ("std", "glover", "glover_rlt", "glover_prlt")
-				options = specify alternative/optional constraints specific to each linearization
-				"""
-				print("running with current(size,density,solver) = ("+str(i)+","+str(j)+","+solve_with+")...")
-				dict = run_trials(glover_bounds="original", trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=0)
-				data.append(dict)
-				print('1/8')
-				dict = run_trials(glover_bounds="original", trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=1)
-				data.append(dict)
-				print('1/4')
-				dict = run_trials(glover_bounds="original", trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=2)
-				data.append(dict)
-				print('3/8')
-				dict = run_trials(glover_bounds="original", trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=3)
-				data.append(dict)
-				print('halfway')
-				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=0)
-				data.append(dict)
-				print('5/8')
-				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=1)
-				data.append(dict)
-				print('3/4')
-				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=2)
-				data.append(dict)
-				print('7/8')
-				dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="glover", size=i, den=j, options=3)
-				data.append(dict)
-				# dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=False, method="std", size=i, den=j, options=1)
-				# data.append(dict)
-				# dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", symmetric=True, method="std", size=i, den=j, options=1)
-				# data.append(dict)
+				for bound in bounds:
+					"""
+					solver = solver to use ("cplex", "gurobi")
+					type = problem type ("QKP", "KQKP", "UQP", "HSP")
+					method = linearization technique ("std", "glover", "glover_rlt", "glover_prlt")
+					glover_bounds = simple ub, continuous program ub, or binary ub ("original", "tight", "tighter")
+					options = specify alternative/optional constraints specific to each linearization
+					"""
+					#trials=5,solver="cplex",type="QKP",symmetric=False,method="std",size=5,den=100, options=0,glover_bounds="tight"
+					print("running with current(size,density,solver) = ("+str(i)+","+str(j)+","+solve_with+")...")
+					dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", method="glover", glover_bounds=bound, size=i, den=j, options=0)
+					data.append(dict)
+					dict = run_trials(trials=num_trials, solver=solve_with, type="KQKP", method="glover", glover_bounds=bound, size=i, den=j, options=0)
+					data.append(dict)
+					dict = run_trials(trials=num_trials, solver=solve_with, type="UQP", method="glover", glover_bounds=bound, size=i, den=j, options=0)
+					data.append(dict)
+					dict = run_trials(trials=num_trials, solver=solve_with, type="HSP", method="glover", glover_bounds=bound, size=i, den=j, options=0)
+					data.append(dict)
 
 
 	#TODO add to df more often/ not just once at the end
@@ -195,7 +179,7 @@ if __name__=="__main__":
 			"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
 	print(df)
 	#save datafrane as .pkl (read back using pd.read_pickle())
-	df.to_pickle('dataframe.pkl')
+	df.to_pickle('glove_bounds.pkl')
 
 	time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
 	excel_filename = "reports/"+time_stamp+'-report.xlsx'

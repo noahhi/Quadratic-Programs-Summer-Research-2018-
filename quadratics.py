@@ -49,7 +49,7 @@ class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 		#knapsack capacity and KQKP num_items constraints (multiple if QMKP)
 		if k_item:
 			for i in range(m):
-				self.num_items.append(np.random.randint(low=1, high=int(n/4)+1))
+				self.num_items.append(np.random.randint(low=2, high=int(n/4)+1))
 				self.b.append(np.random.randint(low=50, high=30*self.num_items[i])) #can get low>high errors
 		else:
 			for i in range(m):
