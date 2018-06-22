@@ -102,13 +102,13 @@ def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",s
 						m = gurobi.standard_linearization(quad, con1=False, con2=False)
 				elif method=="glover":
 					if options==0:
-						m = gurobi.glovers_linearization(quad, use_diagonal=False, lhs_constraints=True)
+						m = gurobi.glovers_linearization(quad, use_diagonal=False, lhs_constraints=True, bounds=glover_bounds)
 					elif options==1:
-						m = gurobi.glovers_linearization(quad, use_diagonal=True, lhs_constraints=True)
+						m = gurobi.glovers_linearization(quad, use_diagonal=True, lhs_constraints=True, bounds=glover_bounds)
 					elif options==2:
-						m = gurobi.glovers_linearization(quad, use_diagonal=False, lhs_constraints=False)
+						m = gurobi.glovers_linearization(quad, use_diagonal=False, lhs_constraints=False, bounds=glover_bounds)
 					elif options==3:
-						m = gurobi.glovers_linearization(quad, use_diagonal=True, lhs_constraints=False)
+						m = gurobi.glovers_linearization(quad, use_diagonal=True, lhs_constraints=False, bounds=glover_bounds)
 				elif method=="glover_rlt":
 					m = gurobi.glovers_linearization_rlt(quad)
 				elif method=="glover_prlt":
@@ -167,7 +167,7 @@ if __name__=="__main__":
 	"""
 	start = timer()
 	num_trials = 1
-	sizes = [40,50,60,70,80,90,100,110,120]
+	sizes = [40,50,60,70,80,90,100,110,120,130,140]
 	densities = [100]
 	solvers = ["cplex", "gurobi"]
 	bounds = ["original", "tight", "tighter"]
@@ -184,18 +184,21 @@ if __name__=="__main__":
 							if i-50 > 0:
 								dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
 											glover_bounds=bound, size=i-50, den=j, options=2, mixed_sign=False)
+								data.append(dict)
 						elif type=="HSP":
 							if i-20 > 0:
 								dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
 											glover_bounds=bound, size=i-20, den=j, options=2, mixed_sign=False)
+								data.append(dict)
 						else:
 							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
 											glover_bounds=bound, size=i, den=j, options=2, mixed_sign=False)
-						data.append(dict)
-						if type=="QKP" or type=="KQKP":
+							data.append(dict)
+							print('running w/ mixed sign')
 							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
 											glover_bounds=bound, size=i, den=j, options=2, mixed_sign=True)
 							data.append(dict)
+
 				df = pd.DataFrame(data)
 				df = df[["solver", "type","mixed_sign", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
 				"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
@@ -215,7 +218,6 @@ if __name__=="__main__":
 	writer.save()
 	end = timer()
 	print("took " + str(end-start) + " seconds to run all trials")
-	book = writer.book
 
 
 # FOR BATCH FILE
