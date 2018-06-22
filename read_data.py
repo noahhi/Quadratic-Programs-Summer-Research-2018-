@@ -12,22 +12,23 @@ import matplotlib.pyplot as plt
 # plt.scatter(x,y)
 # plt.show()
 
-df = pd.read_pickle("dataframe.pkl")
+df = pd.read_pickle("dataframes/glove_bounds.pkl")
+print(df)
 #retrieve desired rows using boolean/mask indexing
-org_bounds = df[df["glover_bounds"]=="original"]
-tight_bounds = df[df["glover_bounds"]=="tight"]
-
-org_bounds_times = org_bounds["avg_total_time"]
-sorted_org = org_bounds_times.sort_values()
-tight_bounds_times = tight_bounds["avg_solve_time"]
-sorted_tight = tight_bounds_times.sort_values()
-
-option0 = df[df["options"]==0]
-option1 = df[df["options"]==1]
-option2 = df[df["options"]==2]
-option3 = df[df["options"]==3]
-x = ['option0', 'option1', 'option2', 'option3']
-
-plt.plot(sorted_org.values)
-plt.plot(sorted_tight.values)
-plt.show()
+# org_bounds = df[df["glover_bounds"]=="original"]
+# tight_bounds = df[df["glover_bounds"]=="tight"]
+#
+# org_bounds_times = org_bounds["avg_total_time"]
+# sorted_org = org_bounds_times.sort_values()
+# tight_bounds_times = tight_bounds["avg_solve_time"]
+# sorted_tight = tight_bounds_times.sort_values()
+#
+# option0 = df[df["options"]==0]
+# option1 = df[df["options"]==1]
+# option2 = df[df["options"]==2]
+# option3 = df[df["options"]==3]
+# x = ['option0', 'option1', 'option2', 'option3']
+#
+# plt.plot(sorted_org.values)
+# plt.plot(sorted_tight.values)
+# plt.show()

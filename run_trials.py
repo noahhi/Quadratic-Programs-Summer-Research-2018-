@@ -142,44 +142,43 @@ def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",s
 		return results
 
 if __name__=="__main__":
+	"""
+	solver = solver to use ("cplex", "gurobi")
+	type = problem type ("QKP", "KQKP", "UQP", "HSP")
+	method = linearization technique ("std", "glover", "glover_rlt", "glover_prlt")
+	glover_bounds = simple ub, continuous program ub, or binary ub ("original", "tight", "tighter")
+	options = specify alternative/optional constraints specific to each linearization
+	"""
 	start = timer()
-	num_trials = 5
-	sizes = [25,50,75]
+	num_trials = 1
+	sizes = [10,20]
 	densities = [100]
 	solvers = ["cplex", "gurobi"]
 	bounds = ["original", "tight", "tighter"]
+	types = ["QKP", "KQKP", "UQP", "HSP"]
 	data = []
 	for i in sizes:
 		for j in densities:
 			for solve_with in solvers:
-				for bound in bounds:
-					"""
-					solver = solver to use ("cplex", "gurobi")
-					type = problem type ("QKP", "KQKP", "UQP", "HSP")
-					method = linearization technique ("std", "glover", "glover_rlt", "glover_prlt")
-					glover_bounds = simple ub, continuous program ub, or binary ub ("original", "tight", "tighter")
-					options = specify alternative/optional constraints specific to each linearization
-					"""
-					#trials=5,solver="cplex",type="QKP",symmetric=False,method="std",size=5,den=100, options=0,glover_bounds="tight"
-					print("running with current(size,density,solver) = ("+str(i)+","+str(j)+","+solve_with+")...")
-					dict = run_trials(trials=num_trials, solver=solve_with, type="QKP", method="glover", glover_bounds=bound, size=i, den=j, options=0)
-					data.append(dict)
-					dict = run_trials(trials=num_trials, solver=solve_with, type="KQKP", method="glover", glover_bounds=bound, size=i, den=j, options=0)
-					data.append(dict)
-					dict = run_trials(trials=num_trials, solver=solve_with, type="UQP", method="glover", glover_bounds=bound, size=i, den=j, options=0)
-					data.append(dict)
-					dict = run_trials(trials=num_trials, solver=solve_with, type="HSP", method="glover", glover_bounds=bound, size=i, den=j, options=0)
-					data.append(dict)
-
-
-	#TODO add to df more often/ not just once at the end
-	#TODO use pickle to save the actual dataframe. Then can retrieve again and continue adding data to it
-	df = pd.DataFrame(data)
-	df = df[["solver", "type", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
+				for type in types:
+					print("running with current(size,density,solver,type) = ("+str(i)+","+str(j)+","+solve_with+","+type+")...")
+					for bound in bounds:
+						#trials=5,solver="cplex",type="QKP",symmetric=False,method="std",size=5,den=100, options=0,glover_bounds="tight"
+						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
+											glover_bounds=bound, size=i, den=j, options=2)
+						data.append(dict)
+			#TODO would it be more efficient to append and clear data[]
+			df = pd.DataFrame(data)
+			df = df[["solver", "type", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
 			"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
+			df.to_pickle('dataframes/glove_bounds.pkl')
+
+	#To add everything to DF once at the end
+	#df = pd.DataFrame(data)
+	#df = df[["solver", "type", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
+	#		"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
+	#df.to_pickle('glove_bounds.pkl')
 	print(df)
-	#save datafrane as .pkl (read back using pd.read_pickle())
-	df.to_pickle('glove_bounds.pkl')
 
 	time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
 	excel_filename = "reports/"+time_stamp+'-report.xlsx'
