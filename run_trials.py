@@ -6,7 +6,7 @@ import time
 import pandas as pd
 from timeit import default_timer as timer
 
-def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",size=5,den=100, options=0,glover_bounds="tight"):
+def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",size=5,den=100, options=0,glover_bounds="tight",mixed_sign=False):
 	"""
 	Runs the same problem type thru given solver with given method repeatedly to get
 	an average solve time
@@ -37,17 +37,33 @@ def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",s
 
 			#generate problem instance
 			if type=="QKP":
-				if symmetric:
-					quad = Knapsack(seed=i, n=size, density=den, symmetric=True)
+				if symmetric and mixed_sign:
+					quad = Knapsack(seed=i, n=size, density=den, symmetric=True, mixed_sign=True)
+				elif symmetric:
+					quad = Knapsack(seed=i, n=size, density=den, symmetric=True, mixed_sign=False)
+				elif mixed_sign:
+					quad = Knapsack(seed=i, n=size, density=den, symmetric=False, mixed_sign=True)
 				else:
-					quad = Knapsack(seed=i, n=size, density=den, symmetric=False)
+					quad = Knapsack(seed=i, n=size, density=den, symmetric=False, mixed_sign=False)
 			elif type=="KQKP":
-				#TODO implement symmetric for all problem types
-				quad = Knapsack(seed=i, n=size, k_item=True, density=den)
+				if symmetric and mixed_sign:
+					quad = Knapsack(seed=i, n=size, k_item=True, density=den, symmetric=True, mixed_sign=True)
+				elif symmetric:
+					quad = Knapsack(seed=i, n=size, k_item=True, density=den, symmetric=True, mixed_sign=False)
+				elif mixed_sign:
+					quad = Knapsack(seed=i, n=size, k_item=True, density=den, symmetric=False, mixed_sign=True)
+				else:
+					quad = Knapsack(seed=i, n=size, k_item=True, density=den, symmetric=False, mixed_sign=False)
 			elif type=="HSP":
-				quad = HSP(seed=i, n=size, density=den)
+				if symmetric:
+					quad = HSP(seed=i, n=size, density=den, symmetric=True)
+				else:
+					quad = HSP(seed=i, n=size, density=den, symmetric=False)
 			elif type=="UQP":
-				quad = UQP(seed=i, n=size, density=den)
+				if symmetric:
+					quad = UQP(seed=i, n=size, density=den, symmetric=True)
+				else:
+					quad = UQP(seed=i, n=size, density=den, symmetric=False)
 			else:
 				raise Exception(str(type) + " is not a valid problem type")
 
@@ -130,7 +146,7 @@ def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",s
 		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":int_gap_sum/trials,
 					"avg_total_time":(setup_time_sum+solve_time_sum)/trials, "std_dev":np.std(instance_total_times),
 					"avg_obj_val":obj_sum/trials, "symmetric": symmetric, "avg_setup_time": setup_time_sum/trials,
-					"avg_solve_time": solve_time_sum/trials, "glover_bounds": glover_bounds}
+					"avg_solve_time": solve_time_sum/trials, "glover_bounds": glover_bounds, "mixed_sign": mixed_sign}
 
 		#print results summary to log file by iterating through results dictionary
 		f.write("\n\nSummary Statistics\n")
@@ -151,7 +167,7 @@ if __name__=="__main__":
 	"""
 	start = timer()
 	num_trials = 1
-	sizes = [10,20]
+	sizes = [40,50,60,70,80,90,100,110,120]
 	densities = [100]
 	solvers = ["cplex", "gurobi"]
 	bounds = ["original", "tight", "tighter"]
@@ -161,17 +177,29 @@ if __name__=="__main__":
 		for j in densities:
 			for solve_with in solvers:
 				for type in types:
-					print("running with current(size,density,solver,type) = ("+str(i)+","+str(j)+","+solve_with+","+type+")...")
+					print("running 3 bound types with current(size,solver,type) = ("+str(i)+","+solve_with+","+type+")...")
 					for bound in bounds:
-						#trials=5,solver="cplex",type="QKP",symmetric=False,method="std",size=5,den=100, options=0,glover_bounds="tight"
-						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, size=i, den=j, options=2)
+						print("bound = " + bound)
+						if type=="UQP":
+							if i-50 > 0:
+								dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
+											glover_bounds=bound, size=i-50, den=j, options=2, mixed_sign=False)
+						elif type=="HSP":
+							if i-20 > 0:
+								dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
+											glover_bounds=bound, size=i-20, den=j, options=2, mixed_sign=False)
+						else:
+							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
+											glover_bounds=bound, size=i, den=j, options=2, mixed_sign=False)
 						data.append(dict)
-			#TODO would it be more efficient to append and clear data[]
-			df = pd.DataFrame(data)
-			df = df[["solver", "type", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
-			"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-			df.to_pickle('dataframes/glove_bounds.pkl')
+						if type=="QKP" or type=="KQKP":
+							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
+											glover_bounds=bound, size=i, den=j, options=2, mixed_sign=True)
+							data.append(dict)
+				df = pd.DataFrame(data)
+				df = df[["solver", "type","mixed_sign", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
+				"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
+				df.to_pickle('dataframes/glove_bounds.pkl')
 
 	#To add everything to DF once at the end
 	#df = pd.DataFrame(data)

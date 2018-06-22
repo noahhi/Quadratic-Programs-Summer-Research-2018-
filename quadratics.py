@@ -41,7 +41,7 @@ class Quadratic: #base class for all quadratic problem types
 		print("")
 
 class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
-	def __init__(self, seed=0, n=10, m=1, density=100, symmetric=False, k_item=False):
+	def __init__(self, seed=0, n=10, m=1, density=100, symmetric=False, k_item=False, mixed_sign=False):
 		super().__init__(seed_=seed, n_=n, m_=m, density_=density, symmetric_=symmetric, k_item_=k_item)
 
 		#item weights
@@ -50,7 +50,8 @@ class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 		if k_item:
 			for i in range(m):
 				self.num_items.append(np.random.randint(low=2, high=int(n/4)+1))
-				self.b.append(np.random.randint(low=50, high=30*self.num_items[i])) #can get low>high errors
+				self.b.append(np.random.randint(low=50, high=30*self.num_items[i]))
+				#TODO upper bound used in org paper: high=30*self.num_items[i]
 		else:
 			for i in range(m):
 				self.b.append(np.random.randint(low=50, high=np.sum(self.a[i])+1))
@@ -58,11 +59,15 @@ class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 		for i in range(n):
 			if(np.random.randint(1,101) <= density):
 				self.c[i] = np.random.randint(low=1, high=101)
+				if mixed_sign and np.random.choice([0,1]):
+					self.c = self.c * -1
 		#pair values
 		for i in range(n):
 			for j in range(i+1,n):
 				if(np.random.randint(1,101) <= density):
 					self.C[i,j] = np.random.randint(low=1, high=101)
+					if mixed_sign and np.random.choice([0,1]):
+						self.C = self.C * -1
 					if(symmetric):
 						self.C[i,j] = self.C[i,j]/2
 						self.C[j,i] = self.C[i,j]
@@ -72,7 +77,7 @@ class UQP(Quadratic): #unconstrained 0-1 quadratic program
 	:objective: Linear and Quadratic values. Same objective as QKP. C[i,j] Can be negative!
 	:constraints: NO CONSTRAINTS (--> trivial if C[i,j] is positive for all i,j)
 	"""
-	def __init__(self, seed=0, n=10, m=1, density=100, symmetric=True):
+	def __init__(self, seed=0, n=10, m=1, density=100, symmetric=False):
 		super().__init__(seed_=seed, n_=n, m_=m, density_=density, symmetric_=symmetric)
 		#item values
 		for i in range(n):
@@ -92,7 +97,7 @@ class HSP(Quadratic): #heaviest k-subgraph problem
 	:objective: Only has quadratic values (no linear coefficients). C[i,j] = 0 or 1
 	:constraints: K-item constraint. Must take exactly k items
 	"""
-	def __init__(self, seed=0, n=16, density=50, symmetric=True, k_ratio=0.5):
+	def __init__(self, seed=0, n=16, density=50, symmetric=False, k_ratio=0.5):
 		super().__init__(seed_=seed, n_=n, density_=density, symmetric_=symmetric)
 		self.num_items = int(k_ratio*n)
 		#pair values
