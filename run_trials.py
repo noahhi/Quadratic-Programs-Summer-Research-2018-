@@ -34,37 +34,38 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 		f.write(seperator+"\n\n")
 
 		for i in range(trials):
+			print("trial number " + str(i))
 			f.write("Iteration "+str(i+1)+"\n")
 
 			#generate problem instance
 			if type=="QKP":
 				if symmetric and mixed_sign:
-					quad = Knapsack(seed=i, n=size, density=den, symmetric=True, mixed_sign=True)
+					quad = Knapsack(seed=i+size+den, n=size, density=den, symmetric=True, mixed_sign=True)
 				elif symmetric:
-					quad = Knapsack(seed=i, n=size, density=den, symmetric=True, mixed_sign=False)
+					quad = Knapsack(seed=i+size+den, n=size, density=den, symmetric=True, mixed_sign=False)
 				elif mixed_sign:
-					quad = Knapsack(seed=i, n=size, density=den, symmetric=False, mixed_sign=True)
+					quad = Knapsack(seed=i+size+den, n=size, density=den, symmetric=False, mixed_sign=True)
 				else:
-					quad = Knapsack(seed=i, n=size, density=den, symmetric=False, mixed_sign=False)
+					quad = Knapsack(seed=i+size+den, n=size, density=den, symmetric=False, mixed_sign=False)
 			elif type=="KQKP":
 				if symmetric and mixed_sign:
-					quad = Knapsack(seed=i, n=size, k_item=True, density=den, symmetric=True, mixed_sign=True)
+					quad = Knapsack(seed=i+size+den, n=size, k_item=True, density=den, symmetric=True, mixed_sign=True)
 				elif symmetric:
-					quad = Knapsack(seed=i, n=size, k_item=True, density=den, symmetric=True, mixed_sign=False)
+					quad = Knapsack(seed=i+size+den, n=size, k_item=True, density=den, symmetric=True, mixed_sign=False)
 				elif mixed_sign:
-					quad = Knapsack(seed=i, n=size, k_item=True, density=den, symmetric=False, mixed_sign=True)
+					quad = Knapsack(seed=i+size+den, n=size, k_item=True, density=den, symmetric=False, mixed_sign=True)
 				else:
-					quad = Knapsack(seed=i, n=size, k_item=True, density=den, symmetric=False, mixed_sign=False)
+					quad = Knapsack(seed=i+size+den, n=size, k_item=True, density=den, symmetric=False, mixed_sign=False)
 			elif type=="HSP":
 				if symmetric:
-					quad = HSP(seed=i, n=size, density=den, symmetric=True)
+					quad = HSP(seed=i+size+den, n=size, density=den, symmetric=True)
 				else:
-					quad = HSP(seed=i, n=size, density=den, symmetric=False)
+					quad = HSP(seed=i+size+den, n=size, density=den, symmetric=False)
 			elif type=="UQP":
 				if symmetric:
-					quad = UQP(seed=i, n=size, density=den, symmetric=True)
+					quad = UQP(seed=i+size+den, n=size, density=den, symmetric=True)
 				else:
-					quad = UQP(seed=i, n=size, density=den, symmetric=False)
+					quad = UQP(seed=i+size+den, n=size, density=den, symmetric=False)
 			else:
 				raise Exception(str(type) + " is not a valid problem type")
 
@@ -171,7 +172,7 @@ if __name__=="__main__":
 	"""
 	start = timer()
 	num_trials = 10
-	sizes = [280]
+	sizes = [150]
 	densities = [100]
 	solvers = ["cplex"]
 	bounds = ["tight"]
