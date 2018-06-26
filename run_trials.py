@@ -6,7 +6,8 @@ import time
 import pandas as pd
 from timeit import default_timer as timer
 
-def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",size=5,den=100, options=0,glover_bounds="tight",mixed_sign=False):
+def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
+			method="std",size=5,den=100, options=0,glover_bounds="tight",mixed_sign=False):
 	"""
 	Runs the same problem type thru given solver with given method repeatedly to get
 	an average solve time
@@ -66,6 +67,9 @@ def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",s
 					quad = UQP(seed=i, n=size, density=den, symmetric=False)
 			else:
 				raise Exception(str(type) + " is not a valid problem type")
+
+			if reorder==True:
+				quad.reorder()
 
 			#model problem with given solver/method
 			if(solver=="cplex"):
@@ -146,7 +150,7 @@ def run_trials(trials=5,solver="cplex",type="QKP",symmetric=False,method="std",s
 		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":int_gap_sum/trials,
 					"avg_total_time":(setup_time_sum+solve_time_sum)/trials, "std_dev":np.std(instance_total_times),
 					"avg_obj_val":obj_sum/trials, "symmetric": symmetric, "avg_setup_time": setup_time_sum/trials,
-					"avg_solve_time": solve_time_sum/trials, "glover_bounds": glover_bounds, "mixed_sign": mixed_sign}
+					"avg_solve_time": solve_time_sum/trials, "glover_bounds": glover_bounds, "mixed_sign": mixed_sign, "reorder":reorder}
 
 		#print results summary to log file by iterating through results dictionary
 		f.write("\n\nSummary Statistics\n")
@@ -166,12 +170,12 @@ if __name__=="__main__":
 	options = specify alternative/optional constraints specific to each linearization
 	"""
 	start = timer()
-	num_trials = 1
-	sizes = [40,50,60,70,80,90,100,110,120,130,140]
+	num_trials = 10
+	sizes = [280]
 	densities = [100]
-	solvers = ["cplex", "gurobi"]
-	bounds = ["original", "tight", "tighter"]
-	types = ["QKP", "KQKP", "UQP", "HSP"]
+	solvers = ["cplex"]
+	bounds = ["tight"]
+	types = ["QKP"]
 	data = []
 	for i in sizes:
 		for j in densities:
@@ -179,30 +183,18 @@ if __name__=="__main__":
 				for type in types:
 					print("running 3 bound types with current(size,solver,type) = ("+str(i)+","+solve_with+","+type+")...")
 					for bound in bounds:
-						print("bound = " + bound)
-						if type=="UQP":
-							if i-50 > 0:
-								dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, size=i-50, den=j, options=2, mixed_sign=False)
-								data.append(dict)
-						elif type=="HSP":
-							if i-20 > 0:
-								dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, size=i-20, den=j, options=2, mixed_sign=False)
-								data.append(dict)
-						else:
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, size=i, den=j, options=2, mixed_sign=False)
-							data.append(dict)
-							print('running w/ mixed sign')
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, size=i, den=j, options=2, mixed_sign=True)
-							data.append(dict)
+						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
+										glover_bounds=bound, size=i, den=j, options=2, mixed_sign=False, reorder=False)
+						data.append(dict)
+						print("halfway")
+						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
+										glover_bounds=bound, size=i, den=j, options=2, mixed_sign=False, reorder=True)
+						data.append(dict)
 
 				df = pd.DataFrame(data)
-				df = df[["solver", "type","mixed_sign", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
+				df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
 				"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-				df.to_pickle('dataframes/glove_bounds.pkl')
+				df.to_pickle('dataframes/reorder_test1.pkl')
 
 	#To add everything to DF once at the end
 	#df = pd.DataFrame(data)

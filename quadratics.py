@@ -41,6 +41,33 @@ class Quadratic: #base class for all quadratic problem types
 			print('quadratic objective coeff vector C = \n' + str(self.C))
 		print("")
 
+	def reorder(self): #
+		C = self.C
+		n = self.n
+		value_matrix = np.absolute(np.copy(self.C))
+		i_lower = np.tril_indices(self.n)
+		value_matrix[i_lower] = value_matrix.T[i_lower]
+		col_sums, new_order = [], []
+		for i in range(self.n):
+			col_sums.append(sum(value_matrix[i]))
+		#TODO this is a bit ineffiecient
+		for i in range(self.n):
+			low_index=col_sums.index(min(col_sums))
+			new_order.append(low_index)
+			for j in range(self.n):
+				col_sums[j]-=value_matrix[low_index][j]
+			col_sums[low_index]=sys.maxsize
+		# for new_index,old_index in zip(new_order,range(self.n)):
+		# 	for j in range(old_index):
+
+		for i in range(n):
+			for j in range(i+1,n):
+				C[i,j] =  value_matrix[new_order[i],new_order[j]]
+		#TODO possible this could cause issues(make sure c is reordered correctly)
+		self.c = [self.c[i] for i in new_order]
+		for j in range(self.m):
+			self.a[j] = [self.a[j][i] for i in new_order]
+
 class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 	def __init__(self, seed=0, n=10, m=1, density=100, symmetric=False, k_item=False, mixed_sign=False):
 		super().__init__(seed_=seed, n_=n, m_=m, density_=density, symmetric_=symmetric, k_item_=k_item)
@@ -72,33 +99,6 @@ class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 					if(symmetric):
 						self.C[i,j] = self.C[i,j]/2
 						self.C[j,i] = self.C[i,j]
-	def reorder(self): #
-		C = self.C
-		n = self.n
-		value_matrix = np.absolute(np.copy(self.C))
-		i_lower = np.tril_indices(self.n)
-		value_matrix[i_lower] = value_matrix.T[i_lower]
-		col_sums, new_order = [], []
-		for i in range(self.n):
-			col_sums.append(sum(value_matrix[i]))
-		#TODO this is a bit ineffiecient
-		for i in range(self.n):
-			low_index=col_sums.index(min(col_sums))
-			new_order.append(low_index)
-			for j in range(self.n):
-				col_sums[j]-=value_matrix[low_index][j]
-			col_sums[low_index]=sys.maxsize
-		# for new_index,old_index in zip(new_order,range(self.n)):
-		# 	for j in range(old_index):
-
-		for i in range(n):
-			for j in range(i+1,n):
-				C[i,j] =  value_matrix[new_order[i],new_order[j]]
-		#TODO possible this could cause issues(make sure c is reordered correctly)
-		self.c = [self.c[i] for i in new_order]
-		for j in range(self.m):
-			self.a[j] = [self.a[j][i] for i in new_order]
-
 
 class UQP(Quadratic): #unconstrained 0-1 quadratic program
 	"""

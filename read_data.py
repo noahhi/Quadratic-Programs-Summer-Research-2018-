@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-
+import time
+import sys
 # data=pd.read_excel(open("C:/Users/huntisan/Desktop/summer2018/std_glove_data.xlsx", "rb"))
 # relevant_data = data.loc[:,["method", "size", "avg_solve_time"]]
 # big_sizes = relevant_data.loc[:, "size"] > 90
@@ -14,6 +15,11 @@ import matplotlib.pyplot as plt
 
 df = pd.read_pickle("dataframes/glove_bounds.pkl")
 print(df)
+time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
+excel_filename = "reports/"+time_stamp+'-report.xlsx'
+writer = pd.ExcelWriter(excel_filename, engine='xlsxwriter')
+df.to_excel(writer, index=False)
+writer.save()
 #retrieve desired rows using boolean/mask indexing
 # org_bounds = df[df["glover_bounds"]=="original"]
 # tight_bounds = df[df["glover_bounds"]=="tight"]
