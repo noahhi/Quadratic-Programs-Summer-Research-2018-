@@ -34,7 +34,6 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 		f.write(seperator+"\n\n")
 
 		for i in range(trials):
-			print("trial number " + str(i))
 			f.write("Iteration "+str(i+1)+"\n")
 
 			#generate problem instance
@@ -96,6 +95,8 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 					m = cplex.glovers_linearization_prlt(quad)
 				else:
 					raise Exception(str(method) + " is not a valid method type")
+				#m[0].log_output = True
+				m[0].set_time_limit(3600) #10800=3 hours #TODO need to output warning here
 				results = cplex.solve_model(m[0])
 			elif(solver=="gurobi"):
 				if method=="std":
@@ -146,6 +147,7 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 			solve_time_sum += instance_solve_time
 			obj_sum += instace_obj_val
 			int_gap_sum += instace_int_gap
+			print("trial number " + str(i) + " took " + str(instance_total_time) + " seconds to solve")
 
 		#return results across trials
 		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":int_gap_sum/trials,
@@ -171,12 +173,12 @@ if __name__=="__main__":
 	options = specify alternative/optional constraints specific to each linearization
 	"""
 	start = timer()
-	num_trials = 10
-	sizes = [150]
+	num_trials = 1
+	sizes = [15,20,25,30,35,40]
 	densities = [100]
-	solvers = ["cplex"]
-	bounds = ["tight"]
-	types = ["QKP"]
+	solvers = ["cplex", "gurobi"]
+	bounds = ["original","tight","tighter"]
+	types = ["HSP"]
 	data = []
 	for i in sizes:
 		for j in densities:
@@ -184,18 +186,15 @@ if __name__=="__main__":
 				for type in types:
 					print("running 3 bound types with current(size,solver,type) = ("+str(i)+","+solve_with+","+type+")...")
 					for bound in bounds:
+						print("bound: " + str(bound))
 						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-										glover_bounds=bound, size=i, den=j, options=2, mixed_sign=False, reorder=False)
+										glover_bounds=bound, size=i, den=j, options=2, reorder=False)
 						data.append(dict)
-						print("halfway")
-						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-										glover_bounds=bound, size=i, den=j, options=2, mixed_sign=False, reorder=True)
-						data.append(dict)
-
+						#TODO could compare symmetric vs UT for hsp
 				df = pd.DataFrame(data)
 				df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
 				"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-				df.to_pickle('dataframes/reorder_test1.pkl')
+				df.to_pickle('dataframes/gloverbounds_hsp.pkl')
 
 	#To add everything to DF once at the end
 	#df = pd.DataFrame(data)
