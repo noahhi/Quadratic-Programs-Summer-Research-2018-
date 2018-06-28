@@ -174,11 +174,11 @@ if __name__=="__main__":
 	"""
 	start = timer()
 	num_trials = 10
-	sizes = [15,20,25,30,35,40,45,50,55,60,65,70,75]
-	densities = [25,75]
-	solvers = ["cplex", "gurobi"]
+	sizes = [10]
+	densities = [100]
+	solvers = ["gurobi","cplex"]
 	bounds = ["original","tight","tighter"]
-	types = ["UQP"]
+	types = ["HSP"]
 	data = []
 	for i in sizes:
 		for j in densities:
@@ -193,7 +193,7 @@ if __name__=="__main__":
 				df = pd.DataFrame(data)
 				df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
 				"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-				df.to_pickle('dataframes/gloverbounds_uqp.pkl')
+				df.to_pickle('dataframes/test.pkl')
 
 	#To add everything to DF once at the end
 	#df = pd.DataFrame(data)

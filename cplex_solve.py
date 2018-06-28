@@ -120,8 +120,8 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 				u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
 				l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
 		elif type(quad) is HSP:
-			u_bound_m.add_constraint(u_bound_m.sum(x[i] for i in range(n)) == quad.num_items)
-			l_bound_m.add_constraint(l_bound_m.sum(x[i] for i in range(n)) == quad.num_items)
+			u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i] for i in range(n)) == quad.num_items)
+			l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i] for i in range(n)) == quad.num_items)
 		for j in range(n):
 			u_bound_m.set_objective(sense="max", expr=u_bound_m.sum(C[i,j]*u_bound_x[i] for i in range(n)))
 			l_bound_m.set_objective(sense="min", expr=l_bound_m.sum(C[i,j]*l_bound_x[i] for i in range(n)))

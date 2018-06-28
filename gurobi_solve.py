@@ -124,6 +124,9 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 			for k in range(quad.m):
 				u_bound_m.addConstr(sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
 				l_bound_m.addConstr(sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+		elif type(quad) is HSP:
+			u_bound_m.addConstr(sum(u_bound_x[i] for i in range(n)) == quad.num_items)
+			l_bound_m.addConstr(sum(l_bound_x[i] for i in range(n)) == quad.num_items)
 		for j in range(n):
 			u_bound_m.setObjective(sum(C[i, j]*u_bound_x[i] for i in range(n)), GRB.MAXIMIZE)
 			l_bound_m.setObjective(sum(C[i, j]*l_bound_x[i] for i in range(n)), GRB.MINIMIZE)
@@ -545,8 +548,14 @@ def no_linearization():
 	m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
 	m.optimize()
 
-knap = Knapsack()
-glovers_linearization(knap, bounds="original")
+# knap = Knapsack()
+# m1=glovers_linearization(knap, bounds="original")[0]
+# m2=glovers_linearization(knap, bounds="tight")[0]
+# m3=glovers_linearization(knap, bounds="tighter")[0]
+# print(solve_model(m1))
+# print(solve_model(m2))
+# print(solve_model(m3))
+
 # m1 = glovers_linearization(knap, use_diagonal=True)[0]
 # m2 = glovers_linearization(knap, lhs_constraints=False)[0]
 # r1 = solve_model(m1)
