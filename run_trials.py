@@ -211,6 +211,8 @@ if __name__=="__main__":
 	end = timer()
 	print("took " + str(end-start) + " seconds to run all trials")
 
+	#testing...
+
 
 # FOR BATCH FILE
 # if(len(sys.argv)==5): #batch file will go through here
