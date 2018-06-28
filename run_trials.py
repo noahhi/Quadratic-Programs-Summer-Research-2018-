@@ -211,7 +211,7 @@ if __name__=="__main__":
 	end = timer()
 	print("took " + str(end-start) + " seconds to run all trials")
 
-	#testing...
+	#testing..
 
 
 # FOR BATCH FILE
