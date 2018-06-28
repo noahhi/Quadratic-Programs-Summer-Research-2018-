@@ -173,28 +173,27 @@ if __name__=="__main__":
 	options = specify alternative/optional constraints specific to each linearization
 	"""
 	start = timer()
-	num_trials = 1
-	sizes = [15,20,25,30,35,40]
-	densities = [100]
+	num_trials = 10
+	sizes = [15,20,25,30,35,40,45,50,55,60,65,70,75]
+	densities = [25,75]
 	solvers = ["cplex", "gurobi"]
 	bounds = ["original","tight","tighter"]
-	types = ["HSP"]
+	types = ["UQP"]
 	data = []
 	for i in sizes:
 		for j in densities:
 			for solve_with in solvers:
 				for type in types:
-					print("running 3 bound types with current(size,solver,type) = ("+str(i)+","+solve_with+","+type+")...")
+					print("running 3 bound types with current(size,den,solver,type) = ("+str(i)+","+str(j)+","+solve_with+","+type+")...")
 					for bound in bounds:
 						print("bound: " + str(bound))
 						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
 										glover_bounds=bound, size=i, den=j, options=2, reorder=False)
 						data.append(dict)
-						#TODO could compare symmetric vs UT for hsp
 				df = pd.DataFrame(data)
 				df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
 				"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-				df.to_pickle('dataframes/gloverbounds_hsp.pkl')
+				df.to_pickle('dataframes/gloverbounds_uqp.pkl')
 
 	#To add everything to DF once at the end
 	#df = pd.DataFrame(data)
