@@ -78,7 +78,7 @@ class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 		if k_item:
 			for i in range(m):
 				self.num_items.append(np.random.randint(low=2, high=int(n/4)+1))
-				self.b.append(np.random.randint(low=50, high=30*self.num_items[i]))
+				self.b.append(np.random.randint(low=50, high=np.sum(self.a[i])+1))
 				#TODO upper bound used in org paper: high=30*self.num_items[i]
 		else:
 			for i in range(m):
@@ -135,3 +135,5 @@ class HSP(Quadratic): #heaviest k-subgraph problem
 					self.C[i,j] = 1
 					if(symmetric):
 						self.C[j,i] = 1
+
+class QSA(Quadratic):
