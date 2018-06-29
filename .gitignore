@@ -2,7 +2,7 @@
 gurobi.log
 log/
 #ignore excel files
-*.xlsx
+reports/*
 *.lp
 *.log
 *.pkl
