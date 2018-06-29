@@ -137,3 +137,4 @@ class HSP(Quadratic): #heaviest k-subgraph problem
 						self.C[j,i] = 1
 
 class QSA(Quadratic):
+	def __init__(self, seed=0, n=3, m=10, density=100, )

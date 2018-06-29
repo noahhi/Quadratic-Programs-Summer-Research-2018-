@@ -467,7 +467,8 @@ def solve_model(model):
 	#use with block to automatically call m.end() when finished
 	with model as m:
 		start = timer()
-		assert m.solve(), "solve failed"
+		#assert m.solve(), "solve failed"
+		m.solve()
 		end = timer()
 		solve_time = end-start
 		objective_value = m.objective_value
@@ -505,8 +506,10 @@ def no_linearization():
 	m.solve()
 	print(m.objective_value)
 
-# knap = Knapsack()
-# m = glovers_linearization(knap, bounds="tighter")
+# knap = Knapsack(m=5)
+#knap.print_info(print_C =False)
+# m = glovers_linearization(knap, bounds="tighter")[0]
+# print(solve_model(m))
 # print(m[1])
 # print(solve_model(m[0]))
 # m = glovers_linearization(knap, bounds="tight")

@@ -3,7 +3,9 @@ gurobi.log
 log/
 #ignore excel files
 *.xlsx
-
+*.lp
+*.log
+*.pkl
 
 # Created by https://www.gitignore.io/api/python
 
