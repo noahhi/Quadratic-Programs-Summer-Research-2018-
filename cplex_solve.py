@@ -160,17 +160,18 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 		else:
 			m.maximize(m.sum(c[j]*x[j] + z[j] for j in range(n)))
 	elif(constraints=="sub1"):
-		s = m.continuous_var_list(keys=n)
+		s = m.continuous_var_list(keys=n,lb=0)
 		for j in range(n):
 			tempsum = sum(C[i,j]*x[i] for i in range(n))
-			m.add_constraint(s[j] >= U[j]*x[j] - tempsum + L[j]*(1-x[j]))
-		m.maximize(m.sum(c[i]*x[i] + (U[i]*x[i]-s[i]) for i in range(n)))
+			m.add_constraint(s[j] >= U1[j]*x[j] - tempsum + L0[j]*(1-x[j]))
+		m.maximize(m.sum(c[i]*x[i] + (U1[i]*x[i]-s[i]) for i in range(n)))
 	elif(constraints=="sub2"):
-		s = m.continuous_var_list(keys=n)
+		s = m.continuous_var_list(keys=n,lb=0)
 		for j in range(n):
 			tempsum = sum(C[i,j]*x[i] for i in range(n))
-			m.add_constraint(s[j] >= -U[j]*x[j] + tempsum - L[j]*(1-x[j]))
-		m.maximize(m.sum(c[i]*x[i] + m.sum(C[i,j]*x[j] for j in range(n))-L[i]*(1-x[i])-s[i] for i in range(n)))
+			m.add_constraint(s[j] >= -U1[j]*x[j] + tempsum - L0[j]*(1-x[j]))
+		#m.maximize(m.sum(c[i]*x[i] + m.sum(C[i,j]*x[j] for j in range(n))-L0[i]*(1-x[i])-s[i] for i in range(n)))
+		m.maximize(sum(c[j]*x[j] for j in range(n)) + sum(sum(C[i,j]*x[i] for i in range(n))-L0[j]*(1-x[j])-s[j] for j in range(n)))
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
@@ -179,6 +180,8 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 
 	#return model
 	return [m,setup_time]
+
+
 
 def glovers_linearization_prlt(quad):
 	def prlt1_linearization(quad): #only called from within reformulate_glover (make inner func?)
@@ -505,6 +508,72 @@ def no_linearization():
 	m.maximize(linear_values + quadratic_values)
 	m.solve()
 	print(m.objective_value)
+
+def qsap_glovers(qsap, bounds="original", constraints="original"):
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
+	mdl = Model(name='qsap_glovers')
+	x = mdl.binary_var_matrix(keys1=m,keys2=n)
+	mdl.add_constraints((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+
+	# mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+	# 			+ sum(sum(sum(sum(c[i,k,j,l]*x[i,k]*x[j,l] for l in range(n))for k in range(n))
+	# 			for j in range(1+i,m)) for i in range(m-1)))
+	# mdl.solve()
+	# mdl.print_solution()
+
+
+	U1 = np.zeros((m,n))
+	L1 = np.zeros((m,n))
+	U0 = np.zeros((m,n))
+	L0 = np.zeros((m,n))
+	if bounds=="original":
+		for i in range(m-1):
+			for k in range(n):
+				col = c[i,k,:,:]
+				pos_take_vals = col > 0
+				pos_take_vals[i,k] = True
+				U1[i,k] = np.sum(col[pos_take_vals])
+				neg_take_vals = col < 0
+				pos_take_vals[i,k] = False
+				L0[i,k] = np.sum(col[neg_take_vals])
+	elif bounds=="tight" or bounds=="tighter":
+		u_bound_mdl = Model(name="u_bound_m")
+		l_bound_mdl = Model(name="l_bound_m")
+		if bounds=="tight":
+			u_bound_x = u_bound_mdl.continuous_var_matrix(keys1=m,keys2=n,ub=1,lb=0)
+			l_bound_x = l_bound_mdl.continuous_var_matrix(keys1=m,keys2=n,ub=1,lb=0)
+		elif bounds == "tighter":
+			u_bound_x = u_bound_mdl.binary_var_matrix(keys1=m,keys2=n,ub=1,lb=0)
+			l_bound_x = l_bound_mdl.binary_var_matrix(keys1=m,keys2=n,ub=1,lb=0)
+		for i in range(m-1):
+			for k in range(n):
+				u_bound_mdl.set_objective(sense="max", expr=sum(sum(c[i,k,j,l]*u_bound_x[j,l] for l in range(n)) for j in range(i+1,m)))
+				l_bound_mdl.set_objective(sense="min", expr=sum(sum(c[i,k,j,l]*l_bound_x[j,l] for l in range(n)) for j in range(i+1,m)))
+				u_con = u_bound_mdl.add_constraint(u_bound_x[i,k]==1)
+				l_con = l_bound_mdl.add_constraint(l_bound_x[i,k]==0)
+				u_bound_mdl.solve()
+				l_bound_mdl.solve()
+				u_bound_mdl.remove_constraint(u_con)
+				l_bound_mdl.remove_constraint(l_con)
+				U1[i,k] = u_bound_mdl.objective_value
+				L0[i,k] = l_bound_mdl.objective_value
+
+	if constraints=="original":
+		z = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=-mdl.infinity)
+		mdl.add_constraints(z[i,k] <= x[i,k]*U1[i,k] for i in range(m-1) for k in range(n))
+		mdl.add_constraints(z[i,k] <= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
+										-L0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
+		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+					+ sum(sum(z[i,k] for k in range(n)) for i in range(m-1)))
+	mdl.solve()
+	mdl.print_solution()
+
+#qsa = QSAP()
+#qsap_glovers(qsa)
 
 # knap = Knapsack(m=5)
 #knap.print_info(print_C =False)

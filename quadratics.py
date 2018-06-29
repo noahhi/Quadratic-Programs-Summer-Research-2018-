@@ -136,5 +136,24 @@ class HSP(Quadratic): #heaviest k-subgraph problem
 					if(symmetric):
 						self.C[j,i] = 1
 
-class QSA(Quadratic):
-	def __init__(self, seed=0, n=3, m=10, density=100, )
+class QSAP: #quadratic semi assignment problem
+	def __init__(self, seed=0, n=4, m=18):
+		"""
+		param n: number of processors
+		param m: number of tasks (each task is assigned to exactly one processor)
+		"""
+		self.seed = seed
+		np.random.seed(seed)
+		self.n = n
+		self.m = m
+		self.e = np.zeros((m,n))
+		for i in range(m):
+			for k in range(n):
+				self.e[i,k] = np.random.randint(-50,51)
+
+		self.c = np.zeros((m,n,m,n))
+		for i in range(m-1):
+			for k in range(n):
+				for j in range(i+1,m):
+					for l in range(n):
+						self.c[i,k,j,l] = np.random.randint(-50,51)

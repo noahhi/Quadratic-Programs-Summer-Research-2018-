@@ -7,7 +7,7 @@ import pandas as pd
 from timeit import default_timer as timer
 
 def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
-			method="std",size=5,multiple=1,den=100, options=0,glover_bounds="tight",mixed_sign=False):
+			method="std",size=5,multiple=1,den=100, options=0,glover_bounds="tight", glover_cons="original",mixed_sign=False):
 	"""
 	Runs the same problem type thru given solver with given method repeatedly to get
 	an average solve time
@@ -62,13 +62,13 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 						m = cplex.standard_linearization(quad, con1=False, con2=False)
 				elif method=="glover":
 					if options==0:
-						m = cplex.glovers_linearization(quad, use_diagonal=False, lhs_constraints=True, bounds=glover_bounds)
+						m = cplex.glovers_linearization(quad, use_diagonal=False, lhs_constraints=True, bounds=glover_bounds, constraints=glover_cons)
 					elif options==1:
-						m = cplex.glovers_linearization(quad, use_diagonal=True, lhs_constraints=True, bounds=glover_bounds)
+						m = cplex.glovers_linearization(quad, use_diagonal=True, lhs_constraints=True, bounds=glover_bounds, constraints=glover_cons)
 					elif options==2:
-						m = cplex.glovers_linearization(quad, use_diagonal=False, lhs_constraints=False, bounds=glover_bounds)
+						m = cplex.glovers_linearization(quad, use_diagonal=False, lhs_constraints=False, bounds=glover_bounds, constraints=glover_cons)
 					elif options==3:
-						m = cplex.glovers_linearization(quad, use_diagonal=True, lhs_constraints=False, bounds=glover_bounds)
+						m = cplex.glovers_linearization(quad, use_diagonal=True, lhs_constraints=False, bounds=glover_bounds, constraints=glover_cons)
 				elif method=="glover_rlt":
 					m = cplex.glovers_linearization_rlt(quad)
 				elif method=="glover_prlt":
@@ -134,7 +134,7 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 					"avg_total_time":(setup_time_sum+solve_time_sum)/trials, "std_dev":np.std(instance_total_times),
 					"avg_obj_val":obj_sum/trials, "symmetric": symmetric, "avg_setup_time": setup_time_sum/trials,
 					"avg_solve_time": solve_time_sum/trials, "glover_bounds": glover_bounds, "mixed_sign": mixed_sign, "reorder":reorder,
-					"multiple":multiple}
+					"multiple":multiple, "glover_cons":glover_cons}
 
 		#print results summary to log file by iterating through results dictionary
 		f.write("\n\nSummary Statistics\n")
@@ -154,55 +154,42 @@ if __name__=="__main__":
 	options = specify alternative/optional constraints specific to each linearization
 	"""
 	start = timer()
-	num_trials = 10
-	sizes = [40,60,70,80,90,100]
-	densities = [75]
+	num_trials = 1
+	sizes = [60,70,80,90,100,110,120,130,140,150,160,170,180,190,200]
+	densities = [25,50,75,100]
 	solvers = ["cplex"]
-	bounds = ["original","tight","tighter"]
-	types = ["QKP","KQKP"]
+	bounds = ["tight"]
+	cons = ["original", "sub1", "sub2"]
+	types = ["QKP"]
 	data = []
 	for i in sizes:
 		for j in densities:
 			for solve_with in solvers:
 				for type in types:
-					for bound in bounds:
-						print("current(size,den,solver,type,bound) = ("+str(i)+","+str(j)+","+solve_with+","+type+","+str(bound)+")...")
-						if type=="QKP":
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, size=i, den=j, multiple=1, options=2, reorder=False)
-							data.append(dict)
-							print("now with mixed sign")
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, size=i-20, den=j, multiple=1, options=2, reorder=False, mixed_sign=True)
-							data.append(dict)
-							print("now with 5 knapsack contraints")
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, size=i, den=j, multiple=5, options=2, reorder=False)
-							data.append(dict)
-							print("now with mixed sign")
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, size=i-20, den=j, multiple=5, options=2, reorder=False, mixed_sign=True)
-							data.append(dict)
-							print("now with 10 knapsack contraints")
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, size=i, den=j, multiple=10, options=2, reorder=False)
-							data.append(dict)
-							print("now with mixed sign")
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, size=i-20, den=j, multiple=10, options=2, reorder=False, mixed_sign=True)
-							data.append(dict)
-						else: #kitem
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-									glover_bounds=bound, size=i-20, den=j, multiple=1, options=2, reorder=False)
-							data.append(dict)
-							print("now with mixed sign")
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-									glover_bounds=bound, size=i-20, den=j, multiple=1, options=2, reorder=False, mixed_sign=True)
-							data.append(dict)
+					for con in cons:
+						print("current(size,den,con) = ("+str(i)+","+str(j)+","+str(con)+")...")
+						print("without lhs constraints")
+						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
+										glover_bounds="tight", glover_cons=con, size=i, den=j, multiple=1, options=2, reorder=False)
+						data.append(dict)
+						print("now with mixed sign")
+						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
+										glover_bounds="tight",glover_cons=con, size=i-50, den=j, multiple=1, options=2, reorder=False, mixed_sign=True)
+						data.append(dict)
+
+						print("now with lhs constraints")
+						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
+										glover_bounds="tight", glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False)
+						data.append(dict)
+						print("now with mixed sign")
+						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
+										glover_bounds="tight",glover_cons=con, size=i-50, den=j, multiple=1, options=0, reorder=False, mixed_sign=True)
+						data.append(dict)
+
 						df = pd.DataFrame(data)
-						df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds","options", "size", "density", "multiple",
-						"avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-						df.to_pickle('dataframes/glove_bounds_knap.pkl')
+						df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
+						 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
+						df.to_pickle('dataframes/glover_cons.pkl')
 
 
 	#To add everything to DF once at the end

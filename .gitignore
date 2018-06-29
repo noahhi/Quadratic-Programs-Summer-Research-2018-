@@ -3,6 +3,7 @@ gurobi.log
 log/
 #ignore excel files
 reports/*
+dataframes/*
 *.lp
 *.log
 *.pkl
