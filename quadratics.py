@@ -20,7 +20,7 @@ class Quadratic: #base class for all quadratic problem types
 		self.density = density_
 		self.symmetric = symmetric_
 		self.k_item = k_item_
-		self.num_items = []
+		self.num_items = -1
 		self.a = []
 		self.b = []
 		self.c = np.zeros(n_)
@@ -74,15 +74,15 @@ class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 
 		#item weights
 		self.a = np.random.randint(low=1, high=51, size=(m, n))
-		#knapsack capacity and KQKP num_items constraints (multiple if QMKP)
+		#knapsack capacity(s)
+		for i in range(m):
+			self.b.append(np.random.randint(low=50, high=np.sum(self.a[i])+1))
+
+		#KQKP num_items constraint
 		if k_item:
-			for i in range(m):
-				self.num_items.append(np.random.randint(low=2, high=int(n/4)+1))
-				self.b.append(np.random.randint(low=50, high=np.sum(self.a[i])+1))
-				#TODO upper bound used in org paper: high=30*self.num_items[i]
-		else:
-			for i in range(m):
-				self.b.append(np.random.randint(low=50, high=np.sum(self.a[i])+1))
+			#Note: upper bound used in org paper fpor kitem was: high=30*self.num_items[i]
+			self.num_items = (np.random.randint(low=2, high=int(n/4)+1))
+
 		#item values
 		for i in range(n):
 			if(np.random.randint(1,101) <= density):
@@ -137,7 +137,7 @@ class HSP(Quadratic): #heaviest k-subgraph problem
 						self.C[j,i] = 1
 
 class QSAP: #quadratic semi assignment problem
-	def __init__(self, seed=0, n=4, m=18):
+	def __init__(self, seed=0, n=3, m=10):
 		"""
 		param n: number of processors
 		param m: number of tasks (each task is assigned to exactly one processor)
