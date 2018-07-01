@@ -195,17 +195,16 @@ def glovers_linearization_prlt(quad):
 
 		# create model and add variables
 		m = Model(name='PRLT-1_linearization')
-		x = m.addVars(n, lb=0, ub=1)
-		w = m.addVars(n, n)
+		x = m.addVars(n, lb=0, ub=1, vtype=GRB.CONTINUOUS)
+		w = m.addVars(n, n, vtype=GRB.CONTINUOUS)
 
 		if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
-			# add capacity constraint(s)
-			for k in range(quad.m):
-				m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-			# k_item constraint(s) if necessary
-			for k in range(len(quad.num_items)):
-				m.addConstr(sum(x[i] for i in range(n)) == quad.num_items[k])
-		elif type(quad) is HSP:
+		# add capacity constraint(s)
+		for k in range(quad.m):
+			m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+
+		#k_item constraint if necessary (if KQKP or HSP)
+		if quad.num_items > 0:
 			m.addConstr(sum(x[i] for i in range(n)) == quad.num_items)
 
 		# add auxiliary constraints
@@ -220,28 +219,33 @@ def glovers_linearization_prlt(quad):
 					m.addConstr(w[i, j] <= x[j])
 
 		# add objective function
-		linear_values = sum(x[j]*c[j] for j in range(n))
+
 		quadratic_values = 0
 		for j in range(n):
 			for i in range(n):
 				if(i == j):
 					continue
 				quadratic_values = quadratic_values + (C[i, j]*w[i, j])
-		m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
+		if type(quad) is HSP:
+			m.setObjective(quadratic_values, GRB.MAXIMIZE)
+		else:
+			m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
+			linear_values = sum(x[j]*c[j] for j in range(n))
 
 		# return model
 		return m
-	n = quad.n
-	C = quad.C
+
 	start = timer()
 	m = prlt1_linearization(quad)
 	m.setParam('OutputFlag', 0)
 	m.optimize()
+
+	n = quad.n
+	C = quad.C
 	duals16 = np.zeros((n, n))
 	for i in range(n):
 		for j in range(i+1, n):
 			con_name = 'con16'+str(i)+str(j)
-			#duals16[i][j] = (m.getConstrByName(con_name).getAttr("Pi"))
 			dual = (m.getConstrByName(con_name).getAttr("Pi"))
 			#makes sure there are no negative values in resulting quadratic matrix
 			if dual > C[i][j]:
