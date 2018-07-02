@@ -515,7 +515,7 @@ def no_linearization():
 	m.maximize(linear_values + quadratic_values)
 	m.solve()
 
-def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False):
+def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, **kwargs):
 	start = timer()
 	n = qsap.n
 	m = qsap.m
@@ -596,6 +596,10 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 		mdl.add_constraints(z[i,k] <= x[i,k]*U1[i,k] for i in range(m-1) for k in range(n))
 		mdl.add_constraints(z[i,k] <= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
 										-L0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
+		if lhs_constraints:
+			mdl.add_constraints(z[i,k] >= x[i,k]*L1[i,k] for i in range(m-1) for k in range(n))
+			mdl.add_constraints(z[i,k] >= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
+										-U0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
 		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
 					+ sum(sum(z[i,k] for k in range(n)) for i in range(m-1)))
 	elif constraints=="sub1":
@@ -604,6 +608,13 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 						for k in range(n) for i in range(m-1))
 		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
 					+ sum(sum(U1[i,k]*x[i,k]-s[i,k] for k in range(n)) for i in range(m-1)))
+	elif constraints=="sub2":
+		s = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=0)
+		mdl.add_constraints(s[i,k] >= -L0[i,k]*(1-x[i,k])-(x[i,k]*U1[i,k])+sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
+		 				for k in range(n) for i in range(m-1))
+		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+					+ sum(sum(-s[i,k]-(L0[i,k]*(1-x[i,k])) + sum(sum(c[i,k,j,l]*x[j,l] for l in range(n))
+					for j in range(i+1,m)) for k in range(n)) for i in range(m-1)))
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
@@ -613,6 +624,12 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	#return model
 	return [mdl,setup_time]
 
-qsap = QSAP()
-m = qsap_glovers(qsap, bounds="tight", constraints="sub1", lhs_constraints=True)[0]
-print(solve_model(m))
+# qsap = QSAP(n=5,m=18)
+# m = qsap_glovers(qsap, bounds="tight", constraints="original", lhs_constraints=True)[0]
+# print(solve_model(m))
+# m = qsap_glovers(qsap, bounds="tight", constraints="original", lhs_constraints=False)[0]
+# print(solve_model(m))
+# m = qsap_glovers(qsap, bounds="tight", constraints="sub1", lhs_constraints=False)[0]
+# print(solve_model(m))
+# m = qsap_glovers(qsap, bounds="tight", constraints="sub2", lhs_constraints=False)[0]
+# print(solve_model(m))

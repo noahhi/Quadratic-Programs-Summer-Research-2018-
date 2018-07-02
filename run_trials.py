@@ -6,6 +6,7 @@ import time
 import pandas as pd
 from timeit import default_timer as timer
 
+
 def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 			method="std",size=5,multiple=1,den=100, options=0,glover_bounds="tight", glover_cons="original",mixed_sign=False):
 	"""
@@ -54,64 +55,35 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 			if reorder==True:
 				quad.reorder()
 
-			#model problem with given solver/method
-			if(solver=="cplex"):
-				if method=="std":
-					if options==0:
-						m = cplex.standard_linearization(quad)
-					elif options==1:
-						m = cplex.standard_linearization(quad, con3=False, con4=False)
-					elif options==2:
-						m = cplex.standard_linearization(quad, con1=False, con2=False)
+			def get_solver(solver_):
+				if solver_=="cplex":
+					return cplex
+				elif solver=="gurobi":
+					return gurobi
+
+			cur_solver = get_solver(solver)
+
+			def get_method(method_):
+				if method_=="std":
+					return cur_solver.standard_linearization
 				elif method=="glover":
-					if options==0:
-						m = cplex.glovers_linearization(quad, use_diagonal=False, lhs_constraints=True, bounds=glover_bounds, constraints=glover_cons)
-					elif options==1:
-						m = cplex.glovers_linearization(quad, use_diagonal=True, lhs_constraints=True, bounds=glover_bounds, constraints=glover_cons)
-					elif options==2:
-						m = cplex.glovers_linearization(quad, use_diagonal=False, lhs_constraints=False, bounds=glover_bounds, constraints=glover_cons)
-					elif options==3:
-						m = cplex.glovers_linearization(quad, use_diagonal=True, lhs_constraints=False, bounds=glover_bounds, constraints=glover_cons)
+					return cur_solver.glovers_linearization
 				elif method=="glover_rlt":
-					m = cplex.glovers_linearization_rlt(quad)
+					return cur_solver.glovers_linearization_rlt
 				elif method=="glover_prlt":
-					m = cplex.glovers_linearization_prlt(quad)
+					return cur_solver.glovers_linearization_prlt
 				elif method=="glover_qsap":
-					m = cplex.qsap_glovers(quad, bounds=glover_bounds, constraints=glover_cons)
+					return cur_solver.qsap_glovers
 				else:
-					raise Exception(str(method) + " is not a valid method type")
-				#m[0].log_output = True
-				m[0].set_time_limit(3600) #10800=3 hours #TODO need to output warning here
-				results = cplex.solve_model(m[0])
-			elif(solver=="gurobi"):
-				if method=="std":
-					if options==0:
-						m = gurobi.standard_linearization(quad)
-					elif options==1:
-						m = gurobi.standard_linearization(quad, con3=False, con4=False)
-					elif options==2:
-						m = gurobi.standard_linearization(quad, con1=False, con2=False)
-				elif method=="glover":
-					if options==0:
-						#TODO should have constraints param in here like in cplex
-						m = gurobi.glovers_linearization(quad, use_diagonal=False, lhs_constraints=True, bounds=glover_bounds)
-					elif options==1:
-						m = gurobi.glovers_linearization(quad, use_diagonal=True, lhs_constraints=True, bounds=glover_bounds)
-					elif options==2:
-						m = gurobi.glovers_linearization(quad, use_diagonal=False, lhs_constraints=False, bounds=glover_bounds)
-					elif options==3:
-						m = gurobi.glovers_linearization(quad, use_diagonal=True, lhs_constraints=False, bounds=glover_bounds)
-				elif method=="glover_rlt":
-					m = gurobi.glovers_linearization_rlt(quad)
-				elif method=="glover_prlt":
-					m = gurobi.glovers_linearization_prlt(quad)
-				elif method=="glover_qsap":
-					m = gurobi.qsap_glovers(quad, bounds=glover_bounds)
-				else:
-					raise Exception(str(method) + " is not a valid method type")
-				results = gurobi.solve_model(m[0])
-			else:
-				raise Exception(str(solver) + "is not a valid solver type")
+					raise Exception(str(method_) + " is not a valid method type")
+
+			#m[0].log_output = True
+			#m[0].set_time_limit(3600) #10800=3 hours #TODO need to output warning here. also implement for gurobi
+			#TODO cons1-4 for std should be able to be turned off/on
+
+			cur_method = get_method(method)
+			m = cur_method(quad, bounds=glover_bounds, constraints=glover_cons, lhs_constraints=options, use_diagonal=False)
+			results = cur_solver.solve_model(m[0])
 
 			#retrieve info from solving instance
 			instance_setup_time = m[1]
@@ -166,42 +138,44 @@ if __name__=="__main__":
 	sizes = [3,4,5,6]
 	densities = [10,15,18,20]
 	solvers = ["cplex"]
-	bounds = ["original","tight","tighter"]
-	cons = ["original", "sub1", "sub2"]
 	types = ["QSAP"]
+	bounds = ["tight"]
+	cons = ["original", "sub1", "sub2"]
 	data = []
 	for i in sizes:
 		for j in densities:
 			for solve_with in solvers:
 				for type in types:
 					for bound in bounds:
-						print("current(size,den,bound) = ("+str(i)+","+str(j)+","+str(bound)+")...")
-						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover_qsap", symmetric=False,
-										glover_bounds=bound, glover_cons="original", size=i, den=j, multiple=1, options=2, reorder=False)
-						data.append(dict)
+						for con in cons:
+							print("current(size,den,solver,type,bound,con) = ("+str(i)+","+str(j)+","
+									+str(solve_with)+","+str(type)+","+str(bound)+","+con+")...")
+							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover_qsap", symmetric=False,
+											glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False)
+							data.append(dict)
 
-						df = pd.DataFrame(data)
-						df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
-						 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-						df.to_pickle('dataframes/glover_bounds_qsap.pkl')
+							if con=="original":
+								print("now with lhs constraints")
+								dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover_qsap", symmetric=False,
+											glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=1, reorder=False)
+								data.append(dict)
 
+							#repeadetely save to DF so we don't lose any data
+							df = pd.DataFrame(data)
+							df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
+							 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
+							df.to_pickle('dataframes/qsap_cons.pkl')
 
-	#To add everything to DF once at the end
-	#df = pd.DataFrame(data)
-	#df = df[["solver", "type", "symmetric", "method","glover_bounds","options", "size", "density", "avg_gap",
-	#		"avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-	#df.to_pickle('glove_bounds.pkl')
-	print(df)
-
+	#save to excel file (name = timestamp)
 	time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
 	excel_filename = "reports/"+time_stamp+'-report.xlsx'
 	writer = pd.ExcelWriter(excel_filename, engine='xlsxwriter')
 	df.to_excel(writer, index=False)
 	writer.save()
 	end = timer()
+	print(df)
 	print("took " + str(end-start) + " seconds to run all trials")
 
-	#testing..
 
 
 # FOR BATCH FILE
