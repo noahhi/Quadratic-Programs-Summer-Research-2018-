@@ -161,7 +161,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 		else:
 			m.maximize(m.sum(c[j]*x[j] + z[j] for j in range(n)))
 
-	elif(constraints=="sub1" || constrains=="sub2"):
+	elif(constraints=="sub1" or constrains=="sub2"):
 		#can make one of 2 substitutions using slack variables to further reduce # of constraints
 		s = m.continuous_var_list(keys=n,lb=0)
 		for j in range(n):
@@ -260,6 +260,7 @@ def glovers_linearization_prlt(quad):
 	setup_time = end-start
 	return [new_m, setup_time]
 
+#TODO glovers_rlt currently works only for knapsack w/ original constraints
 def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	def rlt1_linearization(quad):
 		n = quad.n
@@ -278,10 +279,9 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 			#add capacity constraint(s)
 			for k in range(quad.m):
 				m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-			#k_item constraint(s) if necessary
-			for k in range(len(quad.num_items)):
-				m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items[k])
-		elif type(quad) is HSP:
+
+		#k_item constraint if necessary (if KQKP or HSP)
+		if quad.num_items > 0:
 			m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
 
 		#add auxiliary constraints
@@ -309,14 +309,17 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 				m.add_constraint(y[i,j] == x[i]-w[i,j], ctname='con17'+str(i)+str(j))
 
 		#add objective function
-		linear_values = m.sum(x[j]*c[j] for j in range(n))
 		quadratic_values = 0
 		for j in range(n):
 			for i in range(n):
 				if(i==j):
 					continue
 				quadratic_values = quadratic_values + (C[i,j]*w[i,j])
-		m.maximize(linear_values + quadratic_values)
+		if type(quad) is HSP:
+			m.maximize(quadratic_values)
+		else:
+			linear_values = m.sum(x[j]*c[j] for j in range(n))
+			m.maximize(linear_values + quadratic_values)
 
 		#return model
 		return m
@@ -331,7 +334,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	#model with rlt1, solve continuous relax and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
 	m.solve()
-	#print(m.objective_value)
 	duals16 = np.zeros((n,n))
 	duals17 = np.zeros((n,n))
 	for i in range(n):
@@ -346,7 +348,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 
 	D = np.zeros((n,n))
 	E = np.zeros((n,n))
-
 	#optimal split, found using dual vars from rlt1 continuous relaxation
 	for i in range(n):
 		for j in range(n):
@@ -358,8 +359,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 				D[i,j] = C[i,j]+duals16[j,i]-duals17[i,j]
 	E = -duals17
 
-	#print(D)
-	#print(E)
 	#update linear values as well
 	for j in range(n):
 		c[j] = c[j] + sum(duals17[j,i] for i in range(n))
@@ -380,10 +379,9 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 		#add capacity constraint(s)
 		for k in range(quad.m):
 			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-		#k_item constraint(s) if necessary
-		for k in range(len(quad.num_items)):
-			m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items[k])
-	elif type(quad) is HSP:
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
 		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
 
 	#determine bounds for each column of C
@@ -454,19 +452,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 			tempsum2 = sum(E[i,j]*x[i] for i in range(n) if i!=j)
 			m.add_constraint(z2[j] <= tempsum2 - (L2[j]*x[j]))
 		m.maximize(m.sum(c[j]*x[j] + z1[j] + z2[j] for j in range(n)))
-	#substituted constraints not yet implemented here
-	# elif(constraints=="sub1"):
-		# s = m.continuous_var_list(keys=n)
-		# for j in range(n):
-			# tempsum = sum(C[i,j]*x[i] for i in range(n))
-			# m.add_constraint(s[j] >= U[j]*x[j] - tempsum + L[j]*(1-x[j]))
-		# m.maximize(m.sum(c[i]*x[i] + (U[i]*x[i]-s[i]) for i in range(n)))
-	# elif(constraints=="sub2"):
-		# s = m.continuous_var_list(keys=n)
-		# for j in range(n):
-			# tempsum = sum(C[i,j]*x[i] for i in range(n))
-			# m.add_constraint(s[j] >= -U[j]*x[j] + tempsum - L[j]*(1-x[j]))
-		# m.maximize(m.sum(c[i]*x[i] + m.sum(C[i,j]*x[j] for j in range(n))-L[i]*(1-x[i])-s[i] for i in range(n)))
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
@@ -480,7 +465,6 @@ def solve_model(model):
 	#use with block to automatically call m.end() when finished
 	with model as m:
 		start = timer()
-		#assert m.solve(), "solve failed"
 		m.solve()
 		end = timer()
 		solve_time = end-start
@@ -493,7 +477,8 @@ def solve_model(model):
 			m.set_var_type(relaxation_var,m.continuous_vartype)
 			i+=1
 
-		#TODO this is ugly way to find all binary vars for QSAP and relax them.
+		#TODO this is ugly way to find all binary vars for QSAP and relax themself.
+		#could use method I use in gurobi?
 		if i == 0: #this should only happen if model is for a QSAP problem
 			j = 0
 			while m.get_var_by_name("binary_var_"+str(i)+"_"+str(j)) is not None:
@@ -506,7 +491,6 @@ def solve_model(model):
 				i+=1
 
 		assert m.solve(), "solve failed"
-		#m.print_solution()
 		continuous_obj_value = m.objective_value
 	integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
 
@@ -530,7 +514,6 @@ def no_linearization():
 			quadratic_values = quadratic_values + (x[i]*x[j]*knap.C[i,j])
 	m.maximize(linear_values + quadratic_values)
 	m.solve()
-	print(m.objective_value)
 
 def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False):
 	start = timer()
@@ -607,27 +590,3 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 
 	#return model
 	return [mdl,setup_time]
-
-# qsa = QSAP(n=2,m=5)
-# m = qsap_glovers(qsa, bounds="original", lhs_constraints=True)[0]
-# print(solve_model(m))
-# m.solve()
-# print(m._get_solution())
-
-quad = Knapsack()
-m = glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False)[0]
-print(solve_model(m))
-
-# knap = Knapsack(n=15)
-# m = glovers_linearization(knap, bounds="original", lhs_constraints=True)
-#knap.print_info(print_C =False)
-# m = glovers_linearization(knap, bounds="tighter")[0]
-# print(solve_model(m))
-# print(m[1])
-# print(solve_model(m[0]))
-# m = glovers_linearization(knap, bounds="tight")
-# print(m[1])
-# print(solve_model(m[0]))
-# m = glovers_linearization(knap, bounds="original")
-# print(m[1])
-# print(solve_model(m[0]))

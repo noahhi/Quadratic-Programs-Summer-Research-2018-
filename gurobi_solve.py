@@ -164,7 +164,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 			m.setObjective(sum(c[j]*x[j] + z[j] for j in range(n)), GRB.MAXIMIZE)
 
 
-	elif(constraints=="sub1" || constraints=="sub2"):
+	elif(constraints=="sub1" or constraints=="sub2"):
 		#can make one of 2 substitutions using slack variables to further reduce # of constraints
 		s = m.addVars(n, vtype=GRB.CONTINUOUS)
 		for j in range(n):
@@ -199,9 +199,9 @@ def glovers_linearization_prlt(quad):
 		w = m.addVars(n, n, vtype=GRB.CONTINUOUS)
 
 		if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
-		# add capacity constraint(s)
-		for k in range(quad.m):
-			m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+			# add capacity constraint(s)
+			for k in range(quad.m):
+				m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
 		#k_item constraint if necessary (if KQKP or HSP)
 		if quad.num_items > 0:
@@ -264,6 +264,7 @@ def glovers_linearization_prlt(quad):
 	setup_time = end-start
 	return [new_m, setup_time]
 
+#TODO glovers_rlt currently works only for knapsack w/ original constraints
 def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	def rlt1_linearization(quad):
 		n = quad.n
@@ -274,20 +275,17 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 
 		# create model and add variables
 		m = Model(name='RLT-1_linearization')
-		# default var type is continuous in gurobi
-		# named binary_var so can easily switch for debug
-		x = m.addVars(n, name='binary_var', lb=0, ub=1, vtype=GRB.CONTINUOUS)
-		w = m.addVars(n, n)
-		y = m.addVars(n, n)
+		x = m.addVars(n, name='binary_var', lb=0, ub=1, vtype=GRB.CONTINUOUS) # named binary_var so can easily switch for debug
+		w = m.addVars(n, n, vtype=GRB.CONTINUOUS)
+		y = m.addVars(n, n, vtype=GRB.CONTINUOUS)
 
 		if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
 			# add capacity constraint(s)
 			for k in range(quad.m):
 				m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-			# k_item constraint(s) if necessary
-			for k in range(len(quad.num_items)):
-				m.addConstr(sum(x[i] for i in range(n)) == quad.num_items[k])
-		elif type(quad) is HSP:
+
+		#k_item constraint if necessary (if KQKP or HSP)
+		if quad.num_items > 0:
 			m.addConstr(sum(x[i] for i in range(n)) == quad.num_items)
 
 		# add auxiliary constraints
@@ -314,15 +312,17 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 				# con 17
 				m.addConstr(y[i, j] == x[i]-w[i, j], name='con17'+str(i)+str(j))
 
-		# add objective function
-		linear_values = sum(x[j]*c[j] for j in range(n))
 		quadratic_values = 0
 		for j in range(n):
 			for i in range(n):
 				if(i == j):
 					continue
 				quadratic_values = quadratic_values + (C[i, j]*w[i, j])
-		m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
+		if type(quad) is HSP:
+			m.setObjective(quadratic_values, GRB.MAXIMIZE)
+		else:
+			m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
+			linear_values = sum(x[j]*c[j] for j in range(n))
 
 		# return model
 		return m
@@ -338,7 +338,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	m = rlt1_linearization(quad)
 	m.setParam('OutputFlag', 0)
 	m.optimize()
-	#TODO getting the wrong duals here and/or in cplex
 	#print(m.objVal)     #this should be continuous relax solution to glover_ext.
 	# retrieve dual variables
 	duals16 = np.zeros((n, n))
@@ -352,8 +351,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 				continue
 			con_name = 'con17'+str(i)+str(j)
 			duals17[i][j] = (m.getConstrByName(con_name).getAttr(GRB.attr.Pi))
-	#print(duals16)
-	#print(C)
+
 	D = np.zeros((n, n))
 	E = np.zeros((n, n))
 	# optimal split, found using dual vars from rlt1 continuous relaxation
@@ -366,8 +364,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 			if i > j:
 				D[i, j] = C[i, j]+duals16[j, i]-duals17[i, j]
 	E = -duals17
-	#print(D)
-	#print(E)
+
 	# update linear values as well
 	for j in range(n):
 		c[j] = c[j] + sum(duals17[j, i] for i in range(n))
@@ -384,15 +381,13 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	m = Model(name='glovers_linearization_ext_'+bounds+'_'+constraints)
 	x = m.addVars(n, name="binary_var", vtype=GRB.BINARY)
 
-	# add capacity constraint(s)
 	if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
 		# add capacity constraint(s)
 		for k in range(quad.m):
 			m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-		# k_item constraint(s) if necessary
-		for k in range(len(quad.num_items)):
-			m.addConstr(sum(x[i] for i in range(n)) == quad.num_items[k])
-	elif type(quad) is HSP:
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
 		m.addConstr(sum(x[i] for i in range(n)) == quad.num_items)
 
 	# determine bounds for each column of C
@@ -430,10 +425,8 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 			l_bound_m2.addConstr(sum(l_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
 
 		for j in range(n):
-			u_bound_m1.setObjective(sum(D[i, j]*u_bound_x1[i]
-										for i in range(n) if i != j), GRB.MAXIMIZE)
-			l_bound_m1.setObjective(sum(D[i, j]*l_bound_x1[i]
-										for i in range(n) if i != j), GRB.MINIMIZE)
+			u_bound_m1.setObjective(sum(D[i, j]*u_bound_x1[i] for i in range(n) if i != j), GRB.MAXIMIZE)
+			l_bound_m1.setObjective(sum(D[i, j]*l_bound_x1[i] for i in range(n) if i != j), GRB.MINIMIZE)
 			u_con1 = u_bound_m1.addConstr(u_bound_x1[j] == 1)
 			l_con1 = l_bound_m1.addConstr(l_bound_x1[j] == 0)
 			u_bound_m1.optimize()
@@ -443,10 +436,8 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 			U1[j] = u_bound_m1.objVal
 			L1[j] = l_bound_m1.objVal
 
-			u_bound_m2.setObjective(sum(E[i, j]*u_bound_x2[i]
-										for i in range(n) if i != j), GRB.MAXIMIZE)
-			l_bound_m2.setObjective(sum(E[i, j]*l_bound_x2[i]
-										for i in range(n) if i != j), GRB.MINIMIZE)
+			u_bound_m2.setObjective(sum(E[i, j]*u_bound_x2[i] for i in range(n) if i != j), GRB.MAXIMIZE)
+			l_bound_m2.setObjective(sum(E[i, j]*l_bound_x2[i] for i in range(n) if i != j), GRB.MINIMIZE)
 			u_con2 = u_bound_m2.addConstr(u_bound_x2[j] == 0)
 			l_con2 = l_bound_m2.addConstr(l_bound_x2[j] == 1)
 			u_bound_m2.optimize()
@@ -471,19 +462,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 			tempsum2 = sum(E[i, j]*x[i] for i in range(n) if i != j)
 			m.addConstr(z2[j] <= tempsum2 - (L2[j]*x[j]))
 		m.setObjective(sum(c[j]*x[j] + z1[j] + z2[j] for j in range(n)), GRB.MAXIMIZE)
-	# substituted constraints not yet implemented here
-	# elif(constraints=="sub1"):
-		# s = m.addVars(n)
-		# for j in range(n):
-		# tempsum = sum(C[i,j]*x[i] for i in range(n))
-		# m.addConstr(s[j] >= U[j]*x[j] - tempsum + L[j]*(1-x[j]))
-		# m.setObjective(sum(c[i]*x[i] + (U[i]*x[i]-s[i]) for i in range(n)), GRB.MAXIMIZE)
-	# elif(constraints=="sub2"):
-		# s = m.addVars(n)
-		# for j in range(n):
-		# tempsum = sum(C[i,j]*x[i] for i in range(n))
-		# m.addConstr(s[j] >= -U[j]*x[j] + tempsum - L[j]*(1-x[j]))
-		# m.setObjective(sum(c[i]*x[i] + sum(C[i,j]*x[j] for j in range(n))-L[i]*(1-x[i])-s[i] for i in range(n)), GRB.MAXIMIZE)
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
@@ -509,25 +487,16 @@ def solve_model(m):
 	objective_value = m.objVal
 
 	# relax and solve to get continuous relaxation and integrality_gap
-	# TODO: m.relax() may not be doing what I want
-	#r = m.relax()
-	i = 0
 	vars = m.getVars()
-	#print(vars)
-	#TODO bit inefficient here
 	for var in vars:
 		var.VType = GRB.CONTINUOUS
-	while m.getVarByName("binary_var_"+str(i)) is not None:
-		relaxation_var = m.getVarByName("binary_var_"+str(i))
-		#print(relaxation_var)
-		relaxation_var.VType = GRB.CONTINUOUS
-		i+=1
+	# TODO could just use r = m.relax()?? - probobly more efficient
+
 	m.optimize()
 	continuous_obj_value = m.objVal
-	integrality_gap = ((continuous_obj_value-objective_value)/objective_value)*100
-	# TODO double check this relax is same as cplex relax
 	# terminate model so not allocating resources
 	m.terminate()
+	integrality_gap = ((continuous_obj_value-objective_value)/objective_value)*100
 
 	# create and return results dictionary
 	results = {"solve_time": solve_time,
@@ -549,18 +518,3 @@ def no_linearization():
 			quadratic_values = quadratic_values + (x[i]*x[j]*knap.C[i,j])
 	m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
 	m.optimize()
-
-# knap = Knapsack()
-# m1=glovers_linearization(knap, bounds="original")[0]
-# m2=glovers_linearization(knap, bounds="tight")[0]
-# m3=glovers_linearization(knap, bounds="tighter")[0]
-# print(solve_model(m1))
-# print(solve_model(m2))
-# print(solve_model(m3))
-
-# m1 = glovers_linearization(knap, use_diagonal=True)[0]
-# m2 = glovers_linearization(knap, lhs_constraints=False)[0]
-# r1 = solve_model(m1)
-# r2 = solve_model(m2)
-# print(r1)
-# print(r2)
