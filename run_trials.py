@@ -45,6 +45,9 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 					quad = HSP(seed=i+size+den, n=size, density=den, symmetric=symmetric)
 			elif type=="UQP":
 					quad = UQP(seed=i+size+den, n=size, density=den, symmetric=symmetric)
+			elif type=="QSAP":
+					#qsap always 100% dense, so den is used instead to represent m. number of tasks
+					quad = QSAP(seed=i+size+den, n=size, m=den)
 			else:
 				raise Exception(str(type) + " is not a valid problem type")
 
@@ -73,6 +76,8 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 					m = cplex.glovers_linearization_rlt(quad)
 				elif method=="glover_prlt":
 					m = cplex.glovers_linearization_prlt(quad)
+				elif method=="glover_qsap":
+					m = cplex.qsap_glovers(quad, bounds=glover_bounds, constraints=glover_cons)
 				else:
 					raise Exception(str(method) + " is not a valid method type")
 				#m[0].log_output = True
@@ -88,6 +93,7 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 						m = gurobi.standard_linearization(quad, con1=False, con2=False)
 				elif method=="glover":
 					if options==0:
+						#TODO should have constraints param in here like in cplex
 						m = gurobi.glovers_linearization(quad, use_diagonal=False, lhs_constraints=True, bounds=glover_bounds)
 					elif options==1:
 						m = gurobi.glovers_linearization(quad, use_diagonal=True, lhs_constraints=True, bounds=glover_bounds)
@@ -99,6 +105,8 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 					m = gurobi.glovers_linearization_rlt(quad)
 				elif method=="glover_prlt":
 					m = gurobi.glovers_linearization_prlt(quad)
+				elif method=="glover_qsap":
+					m = gurobi.qsap_glovers(quad, bounds=glover_bounds)
 				else:
 					raise Exception(str(method) + " is not a valid method type")
 				results = gurobi.solve_model(m[0])
@@ -154,42 +162,28 @@ if __name__=="__main__":
 	options = specify alternative/optional constraints specific to each linearization
 	"""
 	start = timer()
-	num_trials = 1
-	sizes = [60,70,80,90,100,110,120,130,140,150,160,170,180,190,200]
-	densities = [25,50,75,100]
+	num_trials = 10
+	sizes = [3,4,5,6]
+	densities = [10,15,18,20]
 	solvers = ["cplex"]
-	bounds = ["tight"]
+	bounds = ["original","tight","tighter"]
 	cons = ["original", "sub1", "sub2"]
-	types = ["QKP"]
+	types = ["QSAP"]
 	data = []
 	for i in sizes:
 		for j in densities:
 			for solve_with in solvers:
 				for type in types:
-					for con in cons:
-						print("current(size,den,con) = ("+str(i)+","+str(j)+","+str(con)+")...")
-						print("without lhs constraints")
-						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-										glover_bounds="tight", glover_cons=con, size=i, den=j, multiple=1, options=2, reorder=False)
-						data.append(dict)
-						print("now with mixed sign")
-						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-										glover_bounds="tight",glover_cons=con, size=i-50, den=j, multiple=1, options=2, reorder=False, mixed_sign=True)
-						data.append(dict)
-
-						print("now with lhs constraints")
-						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-										glover_bounds="tight", glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False)
-						data.append(dict)
-						print("now with mixed sign")
-						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-										glover_bounds="tight",glover_cons=con, size=i-50, den=j, multiple=1, options=0, reorder=False, mixed_sign=True)
+					for bound in bounds:
+						print("current(size,den,bound) = ("+str(i)+","+str(j)+","+str(bound)+")...")
+						dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover_qsap", symmetric=False,
+										glover_bounds=bound, glover_cons="original", size=i, den=j, multiple=1, options=2, reorder=False)
 						data.append(dict)
 
 						df = pd.DataFrame(data)
 						df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
 						 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-						df.to_pickle('dataframes/glover_cons.pkl')
+						df.to_pickle('dataframes/glover_bounds_qsap.pkl')
 
 
 	#To add everything to DF once at the end
