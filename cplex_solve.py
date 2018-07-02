@@ -548,11 +548,13 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 				neg_take_vals[i,k] = False
 				L0[i,k] = np.sum(col[neg_take_vals])
 				if lhs_constraints:
-					pos_take_vals[i,k] = False
-					U0[i,k] = np.sum(col[pos_take_vals])
-					neg_take_vals[i,k] = True
-					L1[i,k] = np.sum(col[neg_take_vals])
-					print(U1[i,k])
+					# pos_take_vals[i,k] = False
+					# U0[i,k] = np.sum(col[pos_take_vals])
+					# neg_take_vals[i,k] = True
+					# L1[i,k] = np.sum(col[neg_take_vals])
+					# This should be equivalent but more efficient
+					U0[i,k] = U1[i,k] - col[i,k]
+					L1[i,k] = L0[i,k] + col[i,k]
 	elif bounds=="tight" or bounds=="tighter":
 		u_bound_mdl = Model(name="u_bound_m")
 		l_bound_mdl = Model(name="l_bound_m")
@@ -572,12 +574,23 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 				l_con = l_bound_mdl.add_constraint(l_bound_x[i,k]==0)
 				u_bound_mdl.solve()
 				l_bound_mdl.solve()
-				#print(u_bound_mdl._get_solution())
-				u_bound_mdl.remove_constraint(u_con)
-				l_bound_mdl.remove_constraint(l_con)
 				U1[i,k] = u_bound_mdl.objective_value
 				L0[i,k] = l_bound_mdl.objective_value
+				u_bound_mdl.remove_constraint(u_con)
+				l_bound_mdl.remove_constraint(l_con)
+				if lhs_constraints:
+					u_con = u_bound_mdl.add_constraint(u_bound_x[i,k] == 0)
+					l_con = l_bound_mdl.add_constraint(l_bound_x[i,k] == 1)
+					u_bound_mdl.solve()
+					l_bound_mdl.solve()
+					U0[i,k] = u_bound_mdl.objective_value
+					L1[i,k] = l_bound_mdl.objective_value
+					u_bound_mdl.remove_constraint(u_con)
+					l_bound_mdl.remove_constraint(l_con)
+	else:
+		raise Exception(bounds + " is not a valid bound type for glovers")
 
+	#add auxiliary constrains
 	if constraints=="original":
 		z = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=-mdl.infinity)
 		mdl.add_constraints(z[i,k] <= x[i,k]*U1[i,k] for i in range(m-1) for k in range(n))
@@ -585,8 +598,21 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 										-L0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
 		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
 					+ sum(sum(z[i,k] for k in range(n)) for i in range(m-1)))
+	elif constraints=="sub1":
+		s = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=0)
+		mdl.add_constraints(s[i,k] >= U1[i,k]*x[i,k]+L0[i,k]*(1-x[i,k])-sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
+						for k in range(n) for i in range(m-1))
+		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+					+ sum(sum(U1[i,k]*x[i,k]-s[i,k] for k in range(n)) for i in range(m-1)))
+	else:
+		raise Exception(constraints + " is not a valid constraint type for glovers")
+
 	end = timer()
 	setup_time = end-start
 
 	#return model
 	return [mdl,setup_time]
+
+qsap = QSAP()
+m = qsap_glovers(qsap, bounds="tight", constraints="sub1", lhs_constraints=True)[0]
+print(solve_model(m))
