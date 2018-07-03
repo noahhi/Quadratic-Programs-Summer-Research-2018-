@@ -20,11 +20,11 @@ def standard_linearization(quad, con1=True, con2=True, con3=True, con4=True):
 	if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
 		# add capacity constraint(s)
 		for k in range(quad.m):
-			m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+			m.addConstr(quicksum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
 	#k_item constraint if necessary (if KQKP or HSP)
 	if quad.num_items > 0:
-		m.addConstr(sum(x[i] for i in range(n)) == quad.num_items)
+		m.addConstr(quicksum(x[i] for i in range(n)) == quad.num_items)
 
 	# add auxiliary constraints
 	for i in range(n):
@@ -79,11 +79,11 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
 		# add capacity constraint(s)
 		for k in range(quad.m):
-			m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+			m.addConstr(quicksum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
 	#k_item constraint if necessary (if KQKP or HSP)
 	if quad.num_items > 0:
-		m.addConstr(sum(x[i] for i in range(n)) == quad.num_items)
+		m.addConstr(quicksum(x[i] for i in range(n)) == quad.num_items)
 
 	# determine bounds for each column of C
 	#U1,L1 must take item at index j, U0,L0 must not take
@@ -117,15 +117,15 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 		if type(quad) is Knapsack:
 			for k in range(quad.m):
 				#add capacity constraints
-				u_bound_m.addConstr(sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
-				l_bound_m.addConstr(sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+				u_bound_m.addConstr(quicksum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+				l_bound_m.addConstr(quicksum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
 		if quad.num_items > 0:
-			u_bound_m.addConstr(sum(u_bound_x[i] for i in range(n)) == quad.num_items)
-			l_bound_m.addConstr(sum(l_bound_x[i] for i in range(n)) == quad.num_items)
+			u_bound_m.addConstr(quicksum(u_bound_x[i] for i in range(n)) == quad.num_items)
+			l_bound_m.addConstr(quicksum(l_bound_x[i] for i in range(n)) == quad.num_items)
 		for j in range(n):
 			#for each col, solve model to find upper/lower bound
-			u_bound_m.setObjective(sum(C[i, j]*u_bound_x[i] for i in range(n)), GRB.MAXIMIZE)
-			l_bound_m.setObjective(sum(C[i, j]*l_bound_x[i] for i in range(n)), GRB.MINIMIZE)
+			u_bound_m.setObjective(quicksum(C[i, j]*u_bound_x[i] for i in range(n)), GRB.MAXIMIZE)
+			l_bound_m.setObjective(quicksum(C[i, j]*l_bound_x[i] for i in range(n)), GRB.MINIMIZE)
 			u_con = u_bound_m.addConstr(u_bound_x[j] == 1)
 			l_con = l_bound_m.addConstr(l_bound_x[j] == 0)
 			u_bound_m.optimize()
@@ -180,29 +180,29 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 		if lhs_constraints:
 			m.addConstrs(z[j] >= L1[j]*x[j] for j in range(n))
 		for j in range(n):
-			tempsum = sum(C[i, j]*x[i] for i in range(n))
+			tempsum = quicksum(C[i, j]*x[i] for i in range(n))
 			m.addConstr(z[j] <= tempsum - L0[j]*(1-x[j]))
 			if lhs_constraints:
 				m.addConstr(z[j] >= tempsum - U0[j]*(1-x[j]))
 		if type(quad) is HSP:
-			m.setObjective(sum(z[j] for j in range(n)), GRB.MAXIMIZE)
+			m.setObjective(quicksum(z[j] for j in range(n)), GRB.MAXIMIZE)
 		else:
-			m.setObjective(sum(c[j]*x[j] + z[j] for j in range(n)), GRB.MAXIMIZE)
+			m.setObjective(quicksum(c[j]*x[j] + z[j] for j in range(n)), GRB.MAXIMIZE)
 
 
 	elif(constraints=="sub1" or constraints=="sub2"):
 		#can make one of 2 substitutions using slack variables to further reduce # of constraints
 		s = m.addVars(n, vtype=GRB.CONTINUOUS)
 		for j in range(n):
-			tempsum = sum(C[i, j]*x[i] for i in range(n))
+			tempsum = quicksum(C[i, j]*x[i] for i in range(n))
 			if constraints=="sub1":
 				m.addConstr(s[j] >= U[j]*x[j] - tempsum + L[j]*(1-x[j]))
 			else:
 				m.addConstr(s[j] >= -U[j]*x[j] + tempsum - L[j]*(1-x[j]))
 		if constraints=="sub1":
-			m.setObjective(sum(c[i]*x[i] + (U[i]*x[i]-s[i]) for i in range(n)), GRB.MAXIMIZE)
+			m.setObjective(quicksum(c[i]*x[i] + (U[i]*x[i]-s[i]) for i in range(n)), GRB.MAXIMIZE)
 		else:
-			m.setObjective(sum(c[i]*x[i] + sum(C[i, j]*x[j] for j in range(n))-L[i]*(1-x[i])-s[i] for i in range(n)), GRB.MAXIMIZE)
+			m.setObjective(quicksum(c[i]*x[i] + quicksum(C[i, j]*x[j] for j in range(n))-L[i]*(1-x[i])-s[i] for i in range(n)), GRB.MAXIMIZE)
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
@@ -227,11 +227,11 @@ def glovers_linearization_prlt(quad):
 		if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
 			# add capacity constraint(s)
 			for k in range(quad.m):
-				m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+				m.addConstr(quicksum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
 		#k_item constraint if necessary (if KQKP or HSP)
 		if quad.num_items > 0:
-			m.addConstr(sum(x[i] for i in range(n)) == quad.num_items)
+			m.addConstr(quicksum(x[i] for i in range(n)) == quad.num_items)
 
 		# add auxiliary constraints
 		for i in range(n):
@@ -240,7 +240,7 @@ def glovers_linearization_prlt(quad):
 
 		for k in range(quad.m):
 			for j in range(n):
-				m.addConstr(sum(a[k][i]*w[i, j] for i in range(n) if i != j) <= (b[k]-a[k][j])*x[j])
+				m.addConstr(quicksum(a[k][i]*w[i, j] for i in range(n) if i != j) <= (b[k]-a[k][j])*x[j])
 				for i in range(n):
 					m.addConstr(w[i, j] <= x[j])
 
@@ -256,7 +256,7 @@ def glovers_linearization_prlt(quad):
 			m.setObjective(quadratic_values, GRB.MAXIMIZE)
 		else:
 			m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
-			linear_values = sum(x[j]*c[j] for j in range(n))
+			linear_values = quicksum(x[j]*c[j] for j in range(n))
 
 		# return model
 		return m
@@ -308,11 +308,11 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 		if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
 			# add capacity constraint(s)
 			for k in range(quad.m):
-				m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+				m.addConstr(quicksum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
 		#k_item constraint if necessary (if KQKP or HSP)
 		if quad.num_items > 0:
-			m.addConstr(sum(x[i] for i in range(n)) == quad.num_items)
+			m.addConstr(quicksum(x[i] for i in range(n)) == quad.num_items)
 
 		# add auxiliary constraints
 		for i in range(n):
@@ -323,9 +323,9 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 		for k in range(quad.m):
 			for j in range(n):
 				# con 12
-				m.addConstr(sum(a[k][i]*w[i, j] for i in range(n) if i != j) <= (b[k]-a[k][j])*x[j])
+				m.addConstr(quicksum(a[k][i]*w[i, j] for i in range(n) if i != j) <= (b[k]-a[k][j])*x[j])
 				# con 14
-				m.addConstr(sum(a[k][i]*y[i, j] for i in range(n) if i != j) <= b[k]*(1-x[j]))
+				m.addConstr(quicksum(a[k][i]*y[i, j] for i in range(n) if i != j) <= b[k]*(1-x[j]))
 
 		for j in range(n):
 			for i in range(n):
@@ -348,7 +348,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 			m.setObjective(quadratic_values, GRB.MAXIMIZE)
 		else:
 			m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
-			linear_values = sum(x[j]*c[j] for j in range(n))
+			linear_values = quicksum(x[j]*c[j] for j in range(n))
 
 		# return model
 		return m
@@ -393,7 +393,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 
 	# update linear values as well
 	for j in range(n):
-		c[j] = c[j] + sum(duals17[j, i] for i in range(n))
+		c[j] = c[j] + quicksum(duals17[j, i] for i in range(n))
 
 	# simple split (this works but is not optimal)
 	# for i in range(n):
@@ -410,11 +410,11 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
 		# add capacity constraint(s)
 		for k in range(quad.m):
-			m.addConstr(sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+			m.addConstr(quicksum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
 	#k_item constraint if necessary (if KQKP or HSP)
 	if quad.num_items > 0:
-		m.addConstr(sum(x[i] for i in range(n)) == quad.num_items)
+		m.addConstr(quicksum(x[i] for i in range(n)) == quad.num_items)
 
 	# determine bounds for each column of C
 	U1 = np.zeros(n)
@@ -438,8 +438,8 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 		u_bound_x1 = u_bound_m1.addVars(n, ub=1, lb=0.0)
 		l_bound_x1 = l_bound_m1.addVars(n, ub=1, lb=0.0)
 		for k in range(quad.m):
-			u_bound_m1.addConstr(sum(u_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
-			l_bound_m1.addConstr(sum(l_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
+			u_bound_m1.addConstr(quicksum(u_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
+			l_bound_m1.addConstr(quicksum(l_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
 		u_bound_m2 = Model(name='upper_bound_model2')
 		l_bound_m2 = Model(name='lower_bound_model2')
 		u_bound_m2.setParam('OutputFlag', 0)
@@ -447,12 +447,12 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 		u_bound_x2 = u_bound_m2.addVars(n, ub=1, lb=0)
 		l_bound_x2 = l_bound_m2.addVars(n, ub=1, lb=0)
 		for k in range(quad.m):
-			u_bound_m2.addConstr(sum(u_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
-			l_bound_m2.addConstr(sum(l_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
+			u_bound_m2.addConstr(quicksum(u_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
+			l_bound_m2.addConstr(quicksum(l_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
 
 		for j in range(n):
-			u_bound_m1.setObjective(sum(D[i, j]*u_bound_x1[i] for i in range(n) if i != j), GRB.MAXIMIZE)
-			l_bound_m1.setObjective(sum(D[i, j]*l_bound_x1[i] for i in range(n) if i != j), GRB.MINIMIZE)
+			u_bound_m1.setObjective(quicksum(D[i, j]*u_bound_x1[i] for i in range(n) if i != j), GRB.MAXIMIZE)
+			l_bound_m1.setObjective(quicksum(D[i, j]*l_bound_x1[i] for i in range(n) if i != j), GRB.MINIMIZE)
 			u_con1 = u_bound_m1.addConstr(u_bound_x1[j] == 1)
 			l_con1 = l_bound_m1.addConstr(l_bound_x1[j] == 0)
 			u_bound_m1.optimize()
@@ -462,8 +462,8 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 			U1[j] = u_bound_m1.objVal
 			L1[j] = l_bound_m1.objVal
 
-			u_bound_m2.setObjective(sum(E[i, j]*u_bound_x2[i] for i in range(n) if i != j), GRB.MAXIMIZE)
-			l_bound_m2.setObjective(sum(E[i, j]*l_bound_x2[i] for i in range(n) if i != j), GRB.MINIMIZE)
+			u_bound_m2.setObjective(quicksum(E[i, j]*u_bound_x2[i] for i in range(n) if i != j), GRB.MAXIMIZE)
+			l_bound_m2.setObjective(quicksum(E[i, j]*l_bound_x2[i] for i in range(n) if i != j), GRB.MINIMIZE)
 			u_con2 = u_bound_m2.addConstr(u_bound_x2[j] == 0)
 			l_con2 = l_bound_m2.addConstr(l_bound_x2[j] == 1)
 			u_bound_m2.optimize()
@@ -483,11 +483,11 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 			m.addConstr(z1[j] <= U1[j]*x[j])
 			m.addConstr(z2[j] <= U2[j]*(1-x[j]))
 		for j in range(n):
-			tempsum1 = sum(D[i, j]*x[i] for i in range(n) if i != j)
+			tempsum1 = quicksum(D[i, j]*x[i] for i in range(n) if i != j)
 			m.addConstr(z1[j] <= tempsum1 - L1[j]*(1-x[j]))
-			tempsum2 = sum(E[i, j]*x[i] for i in range(n) if i != j)
+			tempsum2 = quicksum(E[i, j]*x[i] for i in range(n) if i != j)
 			m.addConstr(z2[j] <= tempsum2 - (L2[j]*x[j]))
-		m.setObjective(sum(c[j]*x[j] + z1[j] + z2[j] for j in range(n)), GRB.MAXIMIZE)
+		m.setObjective(quicksum(c[j]*x[j] + z1[j] + z2[j] for j in range(n)), GRB.MAXIMIZE)
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
@@ -536,11 +536,122 @@ def no_linearization():
 	m = Model(name='quad')
 	x = m.addVars(knap.n, name="binary_var", vtype=GRB.BINARY)
 	for k in range(knap.m):
-			m.addConstr(sum(x[i]*knap.a[k][i] for i in range(knap.n)) <= knap.b[k])
-	linear_values = sum(x[i]*knap.c[i] for i in range(knap.n))
+			m.addConstr(quicksum(x[i]*knap.a[k][i] for i in range(knap.n)) <= knap.b[k])
+	linear_values = quicksum(x[i]*knap.c[i] for i in range(knap.n))
 	quadratic_values = 0
 	for i in range(knap.n):
 		for j in range(knap.n):
 			quadratic_values = quadratic_values + (x[i]*x[j]*knap.C[i,j])
 	m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
 	m.optimize()
+
+def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, **kwargs):
+	start = timer()
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
+	mdl = Model(name='qsap_glovers')
+	x = mdl.addVars(m,n,name="binary_var", vtype=GRB.BINARY)
+	mdl.addConstrs((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+	#let cplex solve w/ quadratic objective function
+	# mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+	# 			+ sum(sum(sum(sum(c[i,k,j,l]*x[i,k]*x[j,l] for l in range(n))for k in range(n))
+	# 			for j in range(1+i,m)) for i in range(m-1)))
+	# mdl.solve()
+	# mdl.print_solution()
+
+
+	U1 = np.zeros((m,n))
+	L0 = np.zeros((m,n))
+	U0 = np.zeros((m,n))
+	L1 = np.zeros((m,n))
+	if bounds=="original":
+		for i in range(m-1):
+			for k in range(n):
+				col = c[i,k,:,:]
+				pos_take_vals = col > 0
+				pos_take_vals[i,k] = True
+				U1[i,k] = np.sum(col[pos_take_vals])
+				neg_take_vals = col < 0
+				neg_take_vals[i,k] = False
+				L0[i,k] = np.sum(col[neg_take_vals])
+				if lhs_constraints:
+					# pos_take_vals[i,k] = False
+					# U0[i,k] = np.sum(col[pos_take_vals])
+					# neg_take_vals[i,k] = True
+					# L1[i,k] = np.sum(col[neg_take_vals])
+					# This should be equivalent but more efficient
+					U0[i,k] = U1[i,k] - col[i,k]
+					L1[i,k] = L0[i,k] + col[i,k]
+	elif bounds=="tight" or bounds=="tighter":
+		u_bound_mdl = Model(name="u_bound_m")
+		l_bound_mdl = Model(name="l_bound_m")
+		u_bound_mdl.setParam('OutputFlag', 0)
+		l_bound_mdl.setParam('OutputFlag', 0)
+		if bounds=="tight":
+			u_bound_x = u_bound_mdl.addVars(keys1=m,keys2=n,ub=1,lb=0)
+			l_bound_x = l_bound_mdl.addVars(keys1=m,keys2=n,ub=1,lb=0)
+		elif bounds == "tighter":
+			u_bound_x = u_bound_mdl.addVars(keys1=m,keys2=n, vtype=GRB.BINARY)
+			l_bound_x = l_bound_mdl.addVars(keys1=m,keys2=n, vtype=GRB.BINARY)
+		u_bound_mdl.addConstrs((quicksum(u_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
+		l_bound_mdl.addConstrs((quicksum(l_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
+		for i in range(m-1):
+			for k in range(n):
+				u_bound_mdl.setObjective(quicksum(quicksum(c[i,k,j,l]*u_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), GRB.MAXIMIZE)
+				l_bound_mdl.setObjective(quicksum(quicksum(c[i,k,j,l]*l_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), GRB.MAXIMIZE)
+				u_con = u_bound_mdl.addConstr(u_bound_x[i,k]==1)
+				l_con = l_bound_mdl.addConstr(l_bound_x[i,k]==0)
+				u_bound_mdl.optimize()
+				l_bound_mdl.optimize()
+				U1[i,k] = u_bound_mdl.objVal
+				L0[i,k] = l_bound_mdl.objVal
+				u_bound_mdl.remove(u_con)
+				l_bound_mdl.remove(l_con)
+				if lhs_constraints:
+					u_con = u_bound_mdl.addConstr(u_bound_x[i,k] == 0)
+					l_con = l_bound_mdl.addConstr(l_bound_x[i,k] == 1)
+					u_bound_mdl.optimize()
+					l_bound_mdl.optimize()
+					U0[i,k] = u_bound_mdl.objVal
+					L1[i,k] = l_bound_mdl.objVal
+					u_bound_mdl.remove(u_con)
+					l_bound_mdl.remove(l_con)
+	else:
+		raise Exception(bounds + " is not a valid bound type for glovers")
+
+	#add auxiliary constrains
+	if constraints=="original":
+		z = mdl.addVars(m,n,lb=-GRB.INFINITY, vtype=GRB.CONTINUOUS)
+		mdl.addConstrs(z[i,k] <= x[i,k]*U1[i,k] for i in range(m-1) for k in range(n))
+		mdl.addConstrs(z[i,k] <= quicksum(quicksum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
+										-L0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
+		if lhs_constraints:
+			mdl.addConstrs(z[i,k] >= x[i,k]*L1[i,k] for i in range(m-1) for k in range(n))
+			mdl.addConstrs(z[i,k] >= quicksum(quicksum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
+										-U0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
+		mdl.setObjective(quicksum(quicksum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+					+ quicksum(quicksum(z[i,k] for k in range(n)) for i in range(m-1)), GRB.MAXIMIZE)
+	elif constraints=="sub1":
+		s = mdl.addVars(m,n,lb=0)
+		mdl.addConstrs(s[i,k] >= U1[i,k]*x[i,k]+L0[i,k]*(1-x[i,k])-quicksum(quicksum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
+						for k in range(n) for i in range(m-1))
+		mdl.setObjective(quicksum(quicksum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+					+ quicksum(quicksum(U1[i,k]*x[i,k]-s[i,k] for k in range(n)) for i in range(m-1)), GRB.MAXIMIZE)
+	elif constraints=="sub2":
+		s = mdl.addVars(m,n,lb=0)
+		mdl.addConstrs(s[i,k] >= -L0[i,k]*(1-x[i,k])-(x[i,k]*U1[i,k])+quicksum(quicksum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
+		 				for k in range(n) for i in range(m-1))
+		mdl.setObjective(quicksum(quicksum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+					+ quicksum(quicksum(-s[i,k]-(L0[i,k]*(1-x[i,k])) + quicksum(quicksum(c[i,k,j,l]*x[j,l] for l in range(n))
+					for j in range(i+1,m)) for k in range(n)) for i in range(m-1)), GRB.MAXIMIZE)
+	else:
+		raise Exception(constraints + " is not a valid constraint type for glovers")
+
+	end = timer()
+	setup_time = end-start
+
+	#return model
+	return [mdl,setup_time]
