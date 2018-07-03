@@ -3,7 +3,7 @@ import numpy as np
 from timeit import default_timer as timer
 from docplex.mp.model import Model
 
-def standard_linearization(quad, con1=True, con2=True, con3=True, con4=True):
+def standard_linearization(quad, con1=True, con2=True, con3=True, con4=True, **kwargs):
 	start = timer()
 	n = quad.n
 	c = quad.c
@@ -117,7 +117,6 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 				u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
 				l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
 		if quad.num_items > 0:
-			#add k item constraints if needed
 			u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i] for i in range(n)) == quad.num_items)
 			l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i] for i in range(n)) == quad.num_items)
 		for j in range(n):
@@ -127,7 +126,19 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 			u_con = u_bound_m.add_constraint(u_bound_x[j]==1)
 			l_con = l_bound_m.add_constraint(l_bound_x[j]==0)
 			u_bound_m.solve()
+			if "OPTIMAL_SOLUTION" not in str(u_bound_m.get_solve_status()):
+				print(str(u_bound_m.get_solve_status()) + " when solving for upper bound (U1)")
+				u_bound_m.remove_constraint(u_con)
+				u_bound_m.add_constraint(u_bound_x[j]==0)
+				m.add_constraint(x[j]==0)
+				u_bound_m.solve()
 			l_bound_m.solve()
+			if "OPTIMAL_SOLUTION" not in str(l_bound_m.get_solve_status()):
+				print(str(l_bound_m.get_solve_status()) + " when solving for lower bound (L0)")
+				l_bound_m.remove_constraint(l_con)
+				l_bound_m.add_constraint(l_bound_x[j]==1)
+				m.add_constraint(x[j]==1)
+				l_bound_m.solve()
 			U1[j] = u_bound_m.objective_value
 			L0[j] = l_bound_m.objective_value
 			u_bound_m.remove_constraint(u_con)
@@ -136,7 +147,20 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 				u_con = u_bound_m.add_constraint(u_bound_x[j] == 0)
 				l_con = l_bound_m.add_constraint(l_bound_x[j] == 1)
 				u_bound_m.solve()
+				if "OPTIMAL_SOLUTION" not in str(u_bound_m.get_solve_status()):
+					#TODO double check optimal sol result w/ std lin
+					print(str(u_bound_m.get_solve_status()) + " when solving for upper bound (U0)")
+					u_bound_m.remove_constraint(u_con)
+					u_bound_m.add_constraint(u_bound_x[j]==1)
+					m.add_constraint(x[j]==1)
+					u_bound_m.solve()
 				l_bound_m.solve()
+				if "OPTIMAL_SOLUTION" not in str(l_bound_m.get_solve_status()):
+					print(str(l_bound_m.get_solve_status()) + " when solving for lower bound (L1)")
+					l_bound_m.remove_constraint(l_con)
+					l_bound_m.add_constraint(l_bound_x[j]==0)
+					m.add_constraint(x[j]==0)
+					l_bound_m.solve()
 				U0[j] = u_bound_m.objective_value
 				L1[j] = l_bound_m.objective_value
 				u_bound_m.remove_constraint(u_con)
@@ -161,7 +185,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 		else:
 			m.maximize(m.sum(c[j]*x[j] + z[j] for j in range(n)))
 
-	elif(constraints=="sub1" or constrains=="sub2"):
+	elif(constraints=="sub1" or constraints=="sub2"):
 		#can make one of 2 substitutions using slack variables to further reduce # of constraints
 		s = m.continuous_var_list(keys=n,lb=0)
 		for j in range(n):
@@ -465,10 +489,11 @@ def solve_model(model):
 	#use with block to automatically call m.end() when finished
 	with model as m:
 		start = timer()
-		m.solve()
+		assert m.solve(), "solve failed"
 		end = timer()
 		solve_time = end-start
 		objective_value = m.objective_value
+		print(objective_value)
 
 		#compute continuous relaxation and integrality_gap
 		i = 0

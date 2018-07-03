@@ -129,7 +129,21 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 			u_con = u_bound_m.addConstr(u_bound_x[j] == 1)
 			l_con = l_bound_m.addConstr(l_bound_x[j] == 0)
 			u_bound_m.optimize()
+			#if GRB.OPTIMAL!=2: #2 means optimal, 3 infeasible. see gurobi docs for status_codes
+			#	print(GRB.OPTIMAL)
+			if u_bound_m.status != GRB.Status.OPTIMAL:
+				print("non-optimal solve status: " + str(u_bound_m.status) + " when solving for upper bound (U1)")
+				u_bound_m.remove(u_con)
+				u_bound_m.addConstr(u_bound_x[j]==0)
+				m.addConstr(x[j]==0)
+				u_bound_m.optimize()
 			l_bound_m.optimize()
+			if l_bound_m.status != GRB.Status.OPTIMAL:
+				print("non-optimal solve status: " + str(l_bound_m.status) + " when solving for lower bound (L0)")
+				l_bound_m.remove(l_con)
+				l_bound_m.addConstr(l_bound_x[j]==1)
+				m.addConstr(x[j]==1)
+				l_bound_m.optimize()
 			U1[j] = u_bound_m.objVal
 			L0[j] = l_bound_m.objVal
 			u_bound_m.remove(u_con)
@@ -138,7 +152,19 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 				u_con = u_bound_m.addConstr(u_bound_x[j] == 0)
 				l_con = l_bound_m.addConstr(l_bound_x[j] == 1)
 				u_bound_m.optimize()
+				if u_bound_m.status != GRB.Status.OPTIMAL:
+					print("non-optimal solve status: " + str(u_bound_m.status) + " when solving for upper bound (U0)")
+					u_bound_m.remove(u_con)
+					u_bound_m.addConstr(u_bound_x[j]==1)
+					m.addConstr(x[j]==1)
+					u_bound_m.optimize()
 				l_bound_m.optimize()
+				if l_bound_m.status != GRB.Status.OPTIMAL:
+					print("non-optimal solve status: " + str(l_bound_m.status) + " when solving for lower bound (L1)")
+					l_bound_m.remove(l_con)
+					l_bound_m.addConstr(l_bound_x[j]==0)
+					m.addConstr(x[j]==0)
+					l_bound_m.optimize()
 				U0[j] = u_bound_m.objVal
 				L1[j] = l_bound_m.objVal
 				u_bound_m.remove(u_con)
