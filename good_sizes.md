@@ -8,6 +8,11 @@
 # **QSAP**  n~4,5 m~15
 * ### ub (6,18) takes ~3000 seconds
 
+# **HSP** (n=40, den=75 took 500 seconds)
+* ### 100% dense take way longer
+
+# **UQP** n~55, den-75
+
 # glover bounds
 #### tight/tighter consistently beat original
 #### tight=tighter for (qsap)

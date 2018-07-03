@@ -145,13 +145,13 @@ if __name__=="__main__":
 	options = specify alternative/optional constraints specific to each linearization
 	"""
 	start = timer()
-	num_trials = 10
-	sizes = [60]
-	densities = [25]
-	solvers = ["gurobi"]
-	types = ["KQKP"]
+	num_trials = 1
+	sizes = [30,35,40,45,50,55,60,65]
+	densities = [25,50,75]
+	solvers = ["cplex"]
+	types = ["UQP"]
 	bounds = ["tight"]
-	cons = ["original"]
+	cons = ["original", "sub1", "sub2"]
 	data = []
 	for i in sizes:
 		for j in densities:
@@ -164,18 +164,13 @@ if __name__=="__main__":
 							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
 											glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False)
 							data.append(dict)
-
-							if con=="original":
-								print("now with lhs constraints")
-								dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=1, reorder=False)
-								data.append(dict)
+							#hsp starts getting slow @(35,75). uqp starts slow @(55,75)
 
 							#repeadetely save to DF so we don't lose any data
 							df = pd.DataFrame(data)
 							df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
 							 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-							df.to_pickle('dataframes/kqkp_cons.pkl')
+							df.to_pickle('dataframes/glovercons_hsp.pkl')
 
 	#save to excel file (name = timestamp)
 	time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")

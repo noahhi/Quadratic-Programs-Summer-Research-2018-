@@ -493,7 +493,7 @@ def solve_model(model):
 		end = timer()
 		solve_time = end-start
 		objective_value = m.objective_value
-		print(objective_value)
+		#print(objective_value)
 
 		#compute continuous relaxation and integrality_gap
 		i = 0

@@ -555,12 +555,12 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	x = mdl.addVars(m,n,name="binary_var", vtype=GRB.BINARY)
 	mdl.addConstrs((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
 
-	#let cplex solve w/ quadratic objective function
-	# mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+	#let gurobi solve w/ quadratic objective function
+	# mdl.setObjective(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
 	# 			+ sum(sum(sum(sum(c[i,k,j,l]*x[i,k]*x[j,l] for l in range(n))for k in range(n))
-	# 			for j in range(1+i,m)) for i in range(m-1)))
-	# mdl.solve()
-	# mdl.print_solution()
+	# 			for j in range(1+i,m)) for i in range(m-1)), GRB.MAXIMIZE)
+	# mdl.optimize()
+	# print(mdl.objVal)
 
 
 	U1 = np.zeros((m,n))
@@ -655,3 +655,6 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 
 	#return model
 	return [mdl,setup_time]
+# 
+# p = QSAP(n=4,m=10)
+# m = qsap_glovers(p)
