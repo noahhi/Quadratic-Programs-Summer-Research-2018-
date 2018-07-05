@@ -531,37 +531,7 @@ def solve_model(model, solve_relax=True):
 				"integrality_gap":integrality_gap}
 	return results
 
-def no_linearization(quad): #TODO cant solve continuous relax here. says non-convex
-	start = timer()
-	n = quad.n
-	c = quad.c
-	m = Model(name='no_linearization')
-	x = m.binary_var_list(n, name="binary_var")
-	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
-		#add capacity constraint(s)
-		for k in range(quad.m):
-			m.add_constraint(m.sum(x[i]*quad.a[k][i] for i in range(n)) <= quad.b[k])
-
-	#k_item constraint if necessary (if KQKP or HSP)
-	if quad.num_items > 0:
-		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
-
-	#compute quadratic values contirbution to obj
-	quadratic_values = 0
-	for i in range(n):
-		for j in range(i+1,n):
-			quadratic_values = quadratic_values + (x[i]*x[j]*quad.C[i,j])
-	#set objective function
-	if type(quad)==HSP:
-		#HSP doesn't habe any linear terms
-		m.maximize(quadratic_values)
-	else:
-		linear_values = m.sum(x[i]*c[i] for i in range(n))
-		m.maximize(linear_values + quadratic_values)
-
-	end = timer()
-	setup_time = end-start
-	return [m, setup_time]
+def no_linearization(quad, **kwargs): 
 
 def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, **kwargs):
 	start = timer()
@@ -672,8 +642,12 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	#return model
 	return [mdl,setup_time]
 
-p = UQP()
-m = no_linearization(p)[0]
-print(solve_model(m, solve_relax=False))
-m = standard_linearization(p)[0]
-print(solve_model(m))
+
+# p = Knapsack(k_item=True)
+# m = no_linearization(p)[0]
+# #m.parameters.optimalitytarget = 3
+# print(solve_model(m, solve_relax=True))
+# m = standard_linearization(p)[0]
+# print(solve_model(m))
+# m = glovers_linearization(p)[0]
+# print(solve_model(m))

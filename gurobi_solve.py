@@ -530,7 +530,7 @@ def solve_model(m, solve_relax=True):
 			   "integrality_gap": integrality_gap}
 	return results
 
-def no_linearization(quad):
+def no_linearization(quad, **kwargs):
 	start = timer()
 	n = quad.n
 	c = quad.c
@@ -670,8 +670,8 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	#return model
 	return [mdl,setup_time]
 
-p = UQP()
-m = no_linearization(p)[0]
-print(solve_model(m, solve_relax=False))
-m = standard_linearization(p)[0]
-print(solve_model(m))
+# p = UQP()
+# m = no_linearization(p)[0]
+# print(solve_model(m, solve_relax=False))
+# m = standard_linearization(p)[0]
+# print(solve_model(m))
