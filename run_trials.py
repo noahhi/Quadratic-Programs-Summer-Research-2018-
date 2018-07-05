@@ -84,46 +84,46 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 			#TODO cons1-4 for std should be able to be turned off/on
 
 			cur_method = get_method(method)
-			try:
-				m = cur_method(quad, bounds=glover_bounds, constraints=glover_cons, lhs_constraints=options, use_diagonal=False)
-			except:
-				f.write("TRIAL FAILED - FAILURE DURING MODELING\n")
-				f.write("=============================================\n")
-				print("TRIAL FAILED - FAILURE DURING MODELING")
-			try:
-				if method=="no_lin":
-					results = cur_solver.solve_model(m[0], solve_relax=False)
-				else:
-					results = cur_solver.solve_model(m[0])
+		#try:
+			m = cur_method(quad, bounds=glover_bounds, constraints=glover_cons, lhs_constraints=options, use_diagonal=False)
+			#except:
+			# f.write("TRIAL FAILED - FAILURE DURING MODELING\n")
+			# f.write("=============================================\n")
+			# print("TRIAL FAILED - FAILURE DURING MODELING")
+			#try:
+			if method=="no_lin":
+				results = cur_solver.solve_model(m[0], solve_relax=False)
+			else:
+				results = cur_solver.solve_model(m[0])
 
-					#retrieve info from solving instance
-				instance_setup_time = m[1]
-				instance_solve_time = results.get("solve_time")
-				instace_obj_val = results.get("objective_value")
-				instace_int_gap = results.get("integrality_gap")
-				instance_relax = results.get("relaxed_solution")
-				instance_total_time = instance_setup_time + instance_solve_time
-				#print instance solve info to log file
-				f.write("Integer Solution: " + str(instace_obj_val)+"\n")
-				f.write("Continuous Solution: " + str(instance_relax)+"\n")
-				f.write("Integrality Gap: " + str(instace_int_gap)+"\n")
-				f.write("Setup Time: " + str(instance_setup_time)+"\n")
-				f.write("Solve Time: " + str(instance_solve_time)+"\n")
-				f.write("Instance Total Time (Setup+Solve): " + str(instance_total_time)+"\n")
-				f.write("=============================================\n")
+				#retrieve info from solving instance
+			instance_setup_time = m[1]
+			instance_solve_time = results.get("solve_time")
+			instace_obj_val = results.get("objective_value")
+			instace_int_gap = results.get("integrality_gap")
+			instance_relax = results.get("relaxed_solution")
+			instance_total_time = instance_setup_time + instance_solve_time
+			#print instance solve info to log file
+			f.write("Integer Solution: " + str(instace_obj_val)+"\n")
+			f.write("Continuous Solution: " + str(instance_relax)+"\n")
+			f.write("Integrality Gap: " + str(instace_int_gap)+"\n")
+			f.write("Setup Time: " + str(instance_setup_time)+"\n")
+			f.write("Solve Time: " + str(instance_solve_time)+"\n")
+			f.write("Instance Total Time (Setup+Solve): " + str(instance_total_time)+"\n")
+			f.write("=============================================\n")
 
-				#update running totals across trials for computing averages
-				instance_total_times.append(instance_total_time)
-				setup_time_sum += instance_setup_time
-				solve_time_sum += instance_solve_time
-				obj_sum += instace_obj_val
-				int_gap_sum += instace_int_gap
-				print("trial number " + str(i) + " took " + str(instance_total_time) + " seconds to solve")
-			except:
-				trials-=1
-				f.write("TRIAL FAILED - FAILED TO SOLVE MODEL\n")
-				f.write("=============================================\n")
-				print("TRIAL FAILED - FAILED TO SOLVE MODEL")
+			#update running totals across trials for computing averages
+			instance_total_times.append(instance_total_time)
+			setup_time_sum += instance_setup_time
+			solve_time_sum += instance_solve_time
+			obj_sum += instace_obj_val
+			int_gap_sum += instace_int_gap
+			print("trial number " + str(i) + " took " + str(instance_total_time) + " seconds to solve")
+			#except:
+			#trials-=1
+			#f.write("TRIAL FAILED - FAILED TO SOLVE MODEL\n")
+			#f.write("=============================================\n")
+			#print("TRIAL FAILED - FAILED TO SOLVE MODEL")
 
 		#return results across trials
 		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":int_gap_sum/trials,
@@ -152,12 +152,12 @@ if __name__=="__main__":
 	"""
 	start = timer()
 	num_trials = 10
-	sizes = [30,35,40,45,50,55,60,65,70,75,80,85]
-	densities = [25,50,75]
+	sizes = [45,50,55,60,65,70,75,80]
+	densities = [100]
 	solvers = ["cplex"]
-	types = ["HSP"]
+	types = ["UQP"]
 	bounds = ["tight"]
-	cons = ["original", "sub1", "sub2"]
+	cons = ["sub1"]
 	data = []
 	for i in sizes:
 		for j in densities:
@@ -165,17 +165,26 @@ if __name__=="__main__":
 				for type in types:
 					for bound in bounds:
 						for con in cons:
+							#use python string formatting to change this more easily TODO
 							print("current(size,den,solver,type,bound,con) = ("+str(i)+","+str(j)+","
 									+str(solve_with)+","+str(type)+","+str(bound)+","+con+")...")
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="no_lin", symmetric=False,
+							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
 											glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False)
+							data.append(dict)
+							print("now with standard lin with sign dependent cons")
+							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="std", symmetric=False,
+											glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False)
+							data.append(dict)
+							print("now with all 4 constraints")
+							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="std", symmetric=False,
+											glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=1, reorder=False)
 							data.append(dict)
 
 							#repeadetely save to DF so we don't lose any data
 							df = pd.DataFrame(data)
 							df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
 							 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-							df.to_pickle('dataframes/testing.pkl')
+							df.to_pickle('dataframes/bls.pkl')
 
 	#save to excel file (name = timestamp)
 	time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")

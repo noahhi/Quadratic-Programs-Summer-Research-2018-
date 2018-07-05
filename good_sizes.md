@@ -8,7 +8,7 @@
 # **QSAP**  n~4,5 m~15
 * ### ub (6,18) takes ~3000 seconds
 
-# **HSP** (n=40, den=75 took 500 seconds)
+# **HSP** (n=40, den=75 took 500 seconds. (45,75) took 6,000)
 * ### 100% dense take way longer
 
 # **UQP** n~55, den-75

@@ -6,7 +6,7 @@ from gurobipy import *
 # turn off model output. otherwise prints bunch of info, clogs console
 setParam('OutputFlag',0)
 
-def standard_linearization(quad, con1=True, con2=True, con3=True, con4=True):
+def standard_linearization(quad, lhs_constraints=True, **kwargs):
 	start = timer()
 	n = quad.n
 	c = quad.c
@@ -31,14 +31,18 @@ def standard_linearization(quad, con1=True, con2=True, con3=True, con4=True):
 	# add auxiliary constraints
 	for i in range(n):
 		for j in range(i+1, n):
-			if(con1):
-				m.addConstr(w[i, j] <= x[i])
-			if(con2):
-				m.addConstr(w[i, j] <= x[j])
-			if(con3):
-				m.addConstr(x[i]+x[j]-1 <= w[i, j])
-			if(con4):
-				m.addConstr(w[i, j] >= 0)
+			if lhs_constraints:
+				if C[i,j] > 0:
+					m.addConstr(w[i,j] <= x[i])
+					m.addConstr(w[i,j] <= x[j])
+				else:
+					m.addConstr(x[i]+x[j]-1 <= w[i,j])
+					m.addConstr(w[i,j] >= 0)
+			else:
+				m.addConstr(w[i,j] <= x[i])
+				m.addConstr(w[i,j] <= x[j])
+				m.addConstr(x[i]+x[j]-1 <= w[i,j])
+				m.addConstr(w[i,j] >= 0)
 
 	#compute quadratic values contirbution to obj
 	quadratic_values = 0
@@ -58,7 +62,7 @@ def standard_linearization(quad, con1=True, con2=True, con3=True, con4=True):
 	# return model + setup time
 	return [m, setup_time]
 
-def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False):
+def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False, **kwargs):
 	start = timer()
 	n = quad.n
 	c = quad.c
@@ -196,13 +200,13 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 		for j in range(n):
 			tempsum = quicksum(C[i, j]*x[i] for i in range(n))
 			if constraints=="sub1":
-				m.addConstr(s[j] >= U[j]*x[j] - tempsum + L[j]*(1-x[j]))
+				m.addConstr(s[j] >= U1[j]*x[j] - tempsum + L0[j]*(1-x[j]))
 			else:
-				m.addConstr(s[j] >= -U[j]*x[j] + tempsum - L[j]*(1-x[j]))
+				m.addConstr(s[j] >= -U1[j]*x[j] + tempsum - L0[j]*(1-x[j]))
 		if constraints=="sub1":
-			m.setObjective(quicksum(c[i]*x[i] + (U[i]*x[i]-s[i]) for i in range(n)), GRB.MAXIMIZE)
+			m.setObjective(quicksum(c[i]*x[i] + (U1[i]*x[i]-s[i]) for i in range(n)), GRB.MAXIMIZE)
 		else:
-			m.setObjective(quicksum(c[i]*x[i] + quicksum(C[i, j]*x[j] for j in range(n))-L[i]*(1-x[i])-s[i] for i in range(n)), GRB.MAXIMIZE)
+			m.setObjective(quicksum(c[i]*x[i] + quicksum(C[i, j]*x[j] for j in range(n))-L0[i]*(1-x[i])-s[i] for i in range(n)), GRB.MAXIMIZE)
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 

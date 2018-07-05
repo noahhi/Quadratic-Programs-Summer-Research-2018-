@@ -123,13 +123,15 @@ class UQP(Quadratic): #unconstrained 0-1 quadratic program
 		#Boolean least squares problem generation
 		D = np.asmatrix(np.random.normal(0,1, (n,n)))
 		y = np.asmatrix(np.random.randint(0,2,n)).transpose()
-		d = D*y + np.random.normal(0,1)
-		Q = D*D.transpose()
-		q = -2*d.transpose()*D
+		d = D@y + np.random.normal(0,1)
+		Q = D@D.T
+		q = -2*d.T@D
 		for i in range(n):
 			self.c[i] = -(q.item(i) + Q.item((i,i)))
 			for j in range(i+1,n):
 				self.C[i,j] = -(2*Q[i,j])
+		#print(self.c)
+		#print(self.C)
 
 
 class HSP(Quadratic): #heaviest k-subgraph problem
@@ -169,5 +171,3 @@ class QSAP: #quadratic semi assignment problem
 				for j in range(i+1,m):
 					for l in range(n):
 						self.c[i,k,j,l] = np.random.randint(-50,51)
-
-p = UQP(n=4)

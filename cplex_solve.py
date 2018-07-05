@@ -3,7 +3,7 @@ import numpy as np
 from timeit import default_timer as timer
 from docplex.mp.model import Model
 
-def standard_linearization(quad, con1=True, con2=True, con3=True, con4=True, **kwargs):
+def standard_linearization(quad, lhs_constraints=True, **kwargs):
 	start = timer()
 	n = quad.n
 	c = quad.c
@@ -14,7 +14,7 @@ def standard_linearization(quad, con1=True, con2=True, con3=True, con4=True, **k
 	#create model and add variables
 	m = Model(name='standard_linearization')
 	x = m.binary_var_list(n, name="binary_var")
-	w = m.continuous_var_matrix(keys1=n, keys2=n)
+	w = m.continuous_var_matrix(keys1=n, keys2=n, lb=-m.infinity)
 
 	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
 		#add capacity constraint(s)
@@ -28,13 +28,17 @@ def standard_linearization(quad, con1=True, con2=True, con3=True, con4=True, **k
 	#add auxiliary constraints
 	for i in range(n):
 		for j in range(i+1,n):
-			if(con1):
+			if lhs_constraints:
+				if C[i,j] > 0:
+					m.add_constraint(w[i,j] <= x[i])
+					m.add_constraint(w[i,j] <= x[j])
+				else:
+					m.add_constraint(x[i]+x[j]-1 <= w[i,j])
+					m.add_constraint(w[i,j] >= 0)
+			else:
 				m.add_constraint(w[i,j] <= x[i])
-			if(con2):
 				m.add_constraint(w[i,j] <= x[j])
-			if(con3):
 				m.add_constraint(x[i]+x[j]-1 <= w[i,j])
-			if(con4):
 				m.add_constraint(w[i,j] >= 0)
 
 	#compute quadratic values contirbution to obj
@@ -562,7 +566,7 @@ def no_linearization(quad, **kwargs):
 	end = timer()
 	setup_time = end-start
 	return [m, setup_time]
-	
+
 def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, **kwargs):
 	start = timer()
 	n = qsap.n
@@ -672,8 +676,17 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	#return model
 	return [mdl,setup_time]
 
+# p = UQP(n=10)
+# m = standard_linearization(p)[0]
+# print(solve_model(m))
+# m = glovers_linearization(p)[0]
+# print(solve_model(m))
 
-# p = Knapsack(k_item=True)
+# p = Knapsack(n=40)
+# m = standard_linearization(p, lhs_constraints=True)
+# print(solve_model(m[0]))
+# m = standard_linearization(p, lhs_constraints=False)
+# print(solve_model(m[0]))
 # m = no_linearization(p)[0]
 # #m.parameters.optimalitytarget = 3
 # print(solve_model(m, solve_relax=False))
