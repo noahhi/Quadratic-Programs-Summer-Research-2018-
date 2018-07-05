@@ -107,18 +107,30 @@ class UQP(Quadratic): #unconstrained 0-1 quadratic program
 	"""
 	def __init__(self, seed=0, n=10, m=1, density=100, symmetric=False):
 		super().__init__(seed_=seed, n_=n, m_=m, density_=density, symmetric_=symmetric)
-		#item values
+		# #item values
+		# for i in range(n):
+		# 	if(np.random.randint(1,101) <= density):
+		# 		self.c[i] = np.random.randint(low=-100, high=101)
+		# #pair values
+		# for i in range(n):
+		# 	for j in range(i+1,n):
+		# 		if(np.random.randint(1,101) <= density):
+		# 			self.C[i,j] = np.random.randint(low=-100, high=101)
+		# 			if(symmetric):
+		# 				self.C[i,j] = self.C[i,j]/2
+		# 				self.C[j,i] = self.C[i,j]
+
+		#Boolean least squares problem generation
+		D = np.asmatrix(np.random.normal(0,1, (n,n)))
+		y = np.asmatrix(np.random.randint(0,2,n)).transpose()
+		d = D*y + np.random.normal(0,1)
+		Q = D*D.transpose()
+		q = -2*d.transpose()*D
 		for i in range(n):
-			if(np.random.randint(1,101) <= density):
-				self.c[i] = np.random.randint(low=-100, high=101)
-		#pair values
-		for i in range(n):
+			self.c[i] = -(q.item(i) + Q.item((i,i)))
 			for j in range(i+1,n):
-				if(np.random.randint(1,101) <= density):
-					self.C[i,j] = np.random.randint(low=-100, high=101)
-					if(symmetric):
-						self.C[i,j] = self.C[i,j]/2
-						self.C[j,i] = self.C[i,j]
+				self.C[i,j] = -(2*Q[i,j])
+
 
 class HSP(Quadratic): #heaviest k-subgraph problem
 	"""
@@ -157,3 +169,5 @@ class QSAP: #quadratic semi assignment problem
 				for j in range(i+1,m):
 					for l in range(n):
 						self.c[i,k,j,l] = np.random.randint(-50,51)
+
+p = UQP(n=4)
