@@ -20,3 +20,10 @@
 # glover constraints
 #### using all 4 (lhs) not worth it
 #### sub2 beats sub1?!
+
+
+# things to test
+* low density, sparse problems (best with std?)
+* default quadratic solvers (confirm this is worse than linearizations)
+* compare solver speeds (is cplex better for some things vs gurobi for others?)
+*

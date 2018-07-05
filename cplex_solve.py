@@ -485,39 +485,44 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	#return model
 	return [m,setup_time]
 
-def solve_model(model):
+def solve_model(model, solve_relax=True):
 	#use with block to automatically call m.end() when finished
 	with model as m:
 		start = timer()
-		assert m.solve(), "solve failed"
+		m.solve()
 		end = timer()
 		solve_time = end-start
 		objective_value = m.objective_value
 		#print(objective_value)
 
-		#compute continuous relaxation and integrality_gap
-		i = 0
-		while m.get_var_by_name("binary_var_"+str(i)) is not None:
-			relaxation_var = m.get_var_by_name("binary_var_"+str(i))
-			m.set_var_type(relaxation_var,m.continuous_vartype)
-			i+=1
-
-		#TODO this is ugly way to find all binary vars for QSAP and relax themself.
-		#could use method I use in gurobi?
-		if i == 0: #this should only happen if model is for a QSAP problem
-			j = 0
-			while m.get_var_by_name("binary_var_"+str(i)+"_"+str(j)) is not None:
-				j=0
-				while m.get_var_by_name("binary_var_"+str(i)+"_"+str(j)) is not None:
-					relaxation_var = m.get_var_by_name("binary_var_"+str(i)+"_"+str(j))
-					m.set_var_type(relaxation_var,m.continuous_vartype)
-					j+=1
-				j-=1
+		if solve_relax:
+			#compute continuous relaxation and integrality_gap
+			i = 0
+			while m.get_var_by_name("binary_var_"+str(i)) is not None:
+				relaxation_var = m.get_var_by_name("binary_var_"+str(i))
+				m.set_var_type(relaxation_var,m.continuous_vartype)
 				i+=1
 
-		assert m.solve(), "solve failed"
-		continuous_obj_value = m.objective_value
-	integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
+			#TODO this is ugly way to find all binary vars for QSAP and relax themself.
+			#could use method I use in gurobi?
+			if i == 0: #this should only happen if model is for a QSAP problem
+				j = 0
+				while m.get_var_by_name("binary_var_"+str(i)+"_"+str(j)) is not None:
+					j=0
+					while m.get_var_by_name("binary_var_"+str(i)+"_"+str(j)) is not None:
+						relaxation_var = m.get_var_by_name("binary_var_"+str(i)+"_"+str(j))
+						m.set_var_type(relaxation_var,m.continuous_vartype)
+						j+=1
+					j-=1
+					i+=1
+
+			m.solve()
+			continuous_obj_value = m.objective_value
+			integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
+		else:
+			continuous_obj_value = -1
+			integrality_gap = -1
+
 
 	#create and return results dictionary
 	results = {"solve_time":solve_time,
@@ -526,19 +531,37 @@ def solve_model(model):
 				"integrality_gap":integrality_gap}
 	return results
 
-def no_linearization():
-	knap = Knapsack()
-	m = Model(name='quad')
-	x = m.binary_var_list(knap.n, name="binary_var")
-	for k in range(knap.m):
-		m.add_constraint(sum(x[i]*knap.a[k][i] for i in range(knap.n)) <= knap.b[k])
-	linear_values = sum(x[i]*knap.c[i] for i in range(knap.n))
+def no_linearization(quad): #TODO cant solve continuous relax here. says non-convex
+	start = timer()
+	n = quad.n
+	c = quad.c
+	m = Model(name='no_linearization')
+	x = m.binary_var_list(n, name="binary_var")
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.add_constraint(m.sum(x[i]*quad.a[k][i] for i in range(n)) <= quad.b[k])
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
+
+	#compute quadratic values contirbution to obj
 	quadratic_values = 0
-	for i in range(knap.n):
-		for j in range(knap.n):
-			quadratic_values = quadratic_values + (x[i]*x[j]*knap.C[i,j])
-	m.maximize(linear_values + quadratic_values)
-	m.solve()
+	for i in range(n):
+		for j in range(i+1,n):
+			quadratic_values = quadratic_values + (x[i]*x[j]*quad.C[i,j])
+	#set objective function
+	if type(quad)==HSP:
+		#HSP doesn't habe any linear terms
+		m.maximize(quadratic_values)
+	else:
+		linear_values = m.sum(x[i]*c[i] for i in range(n))
+		m.maximize(linear_values + quadratic_values)
+
+	end = timer()
+	setup_time = end-start
+	return [m, setup_time]
 
 def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, **kwargs):
 	start = timer()
@@ -649,12 +672,8 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	#return model
 	return [mdl,setup_time]
 
-# qsap = QSAP(n=5,m=18)
-# m = qsap_glovers(qsap, bounds="tight", constraints="original", lhs_constraints=True)[0]
-# print(solve_model(m))
-# m = qsap_glovers(qsap, bounds="tight", constraints="original", lhs_constraints=False)[0]
-# print(solve_model(m))
-# m = qsap_glovers(qsap, bounds="tight", constraints="sub1", lhs_constraints=False)[0]
-# print(solve_model(m))
-# m = qsap_glovers(qsap, bounds="tight", constraints="sub2", lhs_constraints=False)[0]
-# print(solve_model(m))
+p = UQP()
+m = no_linearization(p)[0]
+print(solve_model(m, solve_relax=False))
+m = standard_linearization(p)[0]
+print(solve_model(m))

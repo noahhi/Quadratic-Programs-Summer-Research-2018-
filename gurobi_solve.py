@@ -3,6 +3,8 @@ import numpy as np
 from timeit import default_timer as timer
 from gurobipy import *
 
+# turn off model output. otherwise prints bunch of info, clogs console
+setParam('OutputFlag',0)
 
 def standard_linearization(quad, con1=True, con2=True, con3=True, con4=True):
 	start = timer()
@@ -106,8 +108,6 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	elif(bounds == "tight" or bounds=="tighter"):
 		u_bound_m = Model(name='upper_bound_model')
 		l_bound_m = Model(name='lower_bound_model')
-		u_bound_m.setParam('OutputFlag', 0)
-		l_bound_m.setParam('OutputFlag', 0)
 		if bounds=="tight":
 			u_bound_x = u_bound_m.addVars(n, ub=1, lb=0, vtype=GRB.CONTINUOUS)
 			l_bound_x = l_bound_m.addVars(n, ub=1, lb=0, vtype=GRB.CONTINUOUS)
@@ -263,7 +263,6 @@ def glovers_linearization_prlt(quad):
 
 	start = timer()
 	m = prlt1_linearization(quad)
-	m.setParam('OutputFlag', 0)
 	m.optimize()
 
 	n = quad.n
@@ -362,7 +361,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 
 	# model with continuous relaxed rlt1 and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
-	m.setParam('OutputFlag', 0)
 	m.optimize()
 	#print(m.objVal)     #this should be continuous relax solution to glover_ext.
 	# retrieve dual variables
@@ -433,8 +431,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	elif(bounds == "tight"):
 		u_bound_m1 = Model(name='upper_bound_model1')
 		l_bound_m1 = Model(name='lower_bound_model1')
-		u_bound_m1.setParam('OutputFlag', 0)
-		l_bound_m1.setParam('OutputFlag', 0)
 		u_bound_x1 = u_bound_m1.addVars(n, ub=1, lb=0.0)
 		l_bound_x1 = l_bound_m1.addVars(n, ub=1, lb=0.0)
 		for k in range(quad.m):
@@ -442,8 +438,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 			l_bound_m1.addConstr(quicksum(l_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
 		u_bound_m2 = Model(name='upper_bound_model2')
 		l_bound_m2 = Model(name='lower_bound_model2')
-		u_bound_m2.setParam('OutputFlag', 0)
-		l_bound_m2.setParam('OutputFlag', 0)
 		u_bound_x2 = u_bound_m2.addVars(n, ub=1, lb=0)
 		l_bound_x2 = l_bound_m2.addVars(n, ub=1, lb=0)
 		for k in range(quad.m):
@@ -497,13 +491,13 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	# return model
 	return [m, setup_time]
 
-def solve_model(m):
+def solve_model(m, solve_relax=True):
 	"""
 	Takes in an unsolved gurobi model of a MIP. Solves it as well as continuous
 	relaxation and returns a dictionary containing relevant solve details
 	"""
 	# turn off model output. otherwise prints bunch of info, clogs console
-	m.setParam('OutputFlag', 0)
+	#m.setParam('OutputFlag', 0)
 
 	# start timer and solve model
 	start = timer()
@@ -512,17 +506,22 @@ def solve_model(m):
 	solve_time = end-start
 	objective_value = m.objVal
 
-	# relax and solve to get continuous relaxation and integrality_gap
-	vars = m.getVars()
-	for var in vars:
-		var.VType = GRB.CONTINUOUS
-	# TODO could just use r = m.relax()?? - probobly more efficient
+	if solve_relax:
+		# relax and solve to get continuous relaxation and integrality_gap
+		vars = m.getVars()
+		for var in vars:
+			var.VType = GRB.CONTINUOUS
+		# TODO could just use r = m.relax()?? - probobly more efficient
 
-	m.optimize()
-	continuous_obj_value = m.objVal
+		m.optimize()
+		continuous_obj_value = m.objVal
+		integrality_gap = ((continuous_obj_value-objective_value)/objective_value)*100
+	else:
+		continuous_obj_value = -1
+		integrality_gap = -1
 	# terminate model so not allocating resources
 	m.terminate()
-	integrality_gap = ((continuous_obj_value-objective_value)/objective_value)*100
+
 
 	# create and return results dictionary
 	results = {"solve_time": solve_time,
@@ -531,19 +530,36 @@ def solve_model(m):
 			   "integrality_gap": integrality_gap}
 	return results
 
-def no_linearization():
-	knap = Knapsack()
-	m = Model(name='quad')
-	x = m.addVars(knap.n, name="binary_var", vtype=GRB.BINARY)
-	for k in range(knap.m):
-			m.addConstr(quicksum(x[i]*knap.a[k][i] for i in range(knap.n)) <= knap.b[k])
-	linear_values = quicksum(x[i]*knap.c[i] for i in range(knap.n))
+def no_linearization(quad):
+	start = timer()
+	n = quad.n
+	c = quad.c
+	m = Model(name='no_linearization')
+	x = m.addVars(n, name="binary_var", vtype=GRB.BINARY)
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.addConstr(quicksum(x[i]*quad.a[k][i] for i in range(n)) <= quad.b[k])
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.addConstr(quicksum(x[i] for i in range(n)) == quad.num_items)
+
+	#compute quadratic values contirbution to obj
 	quadratic_values = 0
-	for i in range(knap.n):
-		for j in range(knap.n):
-			quadratic_values = quadratic_values + (x[i]*x[j]*knap.C[i,j])
-	m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
-	m.optimize()
+	for i in range(n):
+		for j in range(i+1,n):
+			quadratic_values = quadratic_values + (x[i]*x[j]*quad.C[i,j])
+	#set objective function
+	if type(quad)==HSP:
+		#HSP doesn't habe any linear terms
+		m.setObjective(quadratic_values, GRB.MAXIMIZE)
+	else:
+		linear_values = quicksum(x[i]*c[i] for i in range(n))
+		m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
+	end = timer()
+	setup_time = end-start
+	return [m, setup_time]
 
 def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, **kwargs):
 	start = timer()
@@ -588,8 +604,6 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	elif bounds=="tight" or bounds=="tighter":
 		u_bound_mdl = Model(name="u_bound_m")
 		l_bound_mdl = Model(name="l_bound_m")
-		u_bound_mdl.setParam('OutputFlag', 0)
-		l_bound_mdl.setParam('OutputFlag', 0)
 		if bounds=="tight":
 			u_bound_x = u_bound_mdl.addVars(keys1=m,keys2=n,ub=1,lb=0)
 			l_bound_x = l_bound_mdl.addVars(keys1=m,keys2=n,ub=1,lb=0)
@@ -655,6 +669,9 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 
 	#return model
 	return [mdl,setup_time]
-# 
-# p = QSAP(n=4,m=10)
-# m = qsap_glovers(p)
+
+p = UQP()
+m = no_linearization(p)[0]
+print(solve_model(m, solve_relax=False))
+m = standard_linearization(p)[0]
+print(solve_model(m))
