@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import time
 import sys
+import os
 # data=pd.read_excel(open("C:/Users/huntisan/Desktop/summer2018/std_glove_data.xlsx", "rb"))
 # relevant_data = data.loc[:,["method", "size", "avg_solve_time"]]
 # big_sizes = relevant_data.loc[:, "size"] > 90
@@ -13,13 +14,24 @@ import sys
 # plt.scatter(x,y)
 # plt.show()
 
-df = pd.read_pickle("dataframes/bls.pkl")
+#read in dataframe
+df = pd.read_pickle("dataframes/native.pkl")
 print(df)
+
+#save dataframe to excel file
 time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
-excel_filename = "reports/"+time_stamp+'-report.xlsx'
-writer = pd.ExcelWriter(excel_filename, engine='xlsxwriter')
-df.to_excel(writer, index=False)
+excel_filename = time_stamp+'-report.xlsx'
+writer = pd.ExcelWriter("reports/"+excel_filename, engine='xlsxwriter')
+df.to_excel(writer, index=False, sheet_name='Sheet1')
+workbook = writer.book
+worksheet = writer.sheets['Sheet1']
+worksheet.conditional_format('P2:P100',{'type':'3_color_scale', 'min_color':'green', 'max_color':'red'})
 writer.save()
+
+#open the excel file for viewing
+os.chdir("reports")
+os.system(excel_filename)
+
 #retrieve desired rows using boolean/mask indexing
 # org_bounds = df[df["glover_bounds"]=="original"]
 # tight_bounds = df[df["glover_bounds"]=="tight"]

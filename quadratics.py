@@ -87,6 +87,7 @@ class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 		for i in range(n):
 			if(np.random.randint(1,101) <= density):
 				self.c[i] = np.random.randint(low=1, high=101)
+				#self.c[i] = np.random.normal(50,10)
 				if mixed_sign and np.random.choice([0,1]):
 					self.c = self.c * -1
 		#pair values
@@ -94,6 +95,7 @@ class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 			for j in range(i+1,n):
 				if(np.random.randint(1,101) <= density):
 					self.C[i,j] = np.random.randint(low=1, high=101)
+					#self.C[i,j] = np.random.normal(50,10)
 					if mixed_sign and np.random.choice([0,1]):
 						self.C = self.C * -1
 					if(symmetric):
@@ -132,7 +134,6 @@ class UQP(Quadratic): #unconstrained 0-1 quadratic program
 				self.C[i,j] = -(2*Q[i,j])
 		#print(self.c)
 		#print(self.C)
-
 
 class HSP(Quadratic): #heaviest k-subgraph problem
 	"""

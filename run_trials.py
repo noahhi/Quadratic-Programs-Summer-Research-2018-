@@ -118,7 +118,7 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 			solve_time_sum += instance_solve_time
 			obj_sum += instace_obj_val
 			int_gap_sum += instace_int_gap
-			print("trial number " + str(i) + " took " + str(instance_total_time) + " seconds to solve")
+			print("trial number {:2} took {:7.2f} seconds to solve".format(i,instance_total_time))
 			#except:
 			#trials-=1
 			#f.write("TRIAL FAILED - FAILED TO SOLVE MODEL\n")
@@ -152,39 +152,32 @@ if __name__=="__main__":
 	"""
 	start = timer()
 	num_trials = 10
-	sizes = [45,50,55,60,65,70,75,80]
-	densities = [100]
+	sizes = [20,50,60,70,80,90,100,110]
+	densities = [50,75,100]
 	solvers = ["cplex"]
-	types = ["UQP"]
+	types = ["QKP"]
 	bounds = ["tight"]
 	cons = ["sub1"]
+	methods = ["std"]
 	data = []
-	for i in sizes:
-		for j in densities:
-			for solve_with in solvers:
+	for solve_with in solvers:
+		for i in sizes:
+			for j in densities:
 				for type in types:
 					for bound in bounds:
 						for con in cons:
-							#use python string formatting to change this more easily TODO
-							print("current(size,den,solver,type,bound,con) = ("+str(i)+","+str(j)+","
-									+str(solve_with)+","+str(type)+","+str(bound)+","+con+")...")
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="glover", symmetric=False,
-											glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False)
-							data.append(dict)
-							print("now with standard lin with sign dependent cons")
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="std", symmetric=False,
-											glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False)
-							data.append(dict)
-							print("now with all 4 constraints")
-							dict = run_trials(trials=num_trials, solver=solve_with, type=type,method="std", symmetric=False,
-											glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=1, reorder=False)
-							data.append(dict)
+							for method in methods:
+								print("running-( {} , {} , {} , {} , {} , {} , {} )".format(solve_with.upper(),i,j,type,method,bound,con))
+								dict = run_trials(trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
+												glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False, mixed_sign=False)
+								data.append(dict)
 
-							#repeadetely save to DF so we don't lose any data
-							df = pd.DataFrame(data)
-							df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
-							 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-							df.to_pickle('dataframes/bls.pkl')
+
+								#repeadetely save to DF so we don't lose any data
+								df = pd.DataFrame(data)
+								df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
+								 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
+								df.to_pickle('dataframes/testing.pkl')
 
 	#save to excel file (name = timestamp)
 	time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
@@ -194,7 +187,7 @@ if __name__=="__main__":
 	writer.save()
 	end = timer()
 	print(df)
-	print("took " + str(end-start) + " seconds to run all trials")
+	print("took {:.3} seconds to run all trials".format(end-start))
 
 
 
