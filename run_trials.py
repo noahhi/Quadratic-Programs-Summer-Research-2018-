@@ -84,7 +84,7 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 			#TODO cons1-4 for std should be able to be turned off/on
 
 			cur_method = get_method(method)
-		#try:
+			#try:
 			m = cur_method(quad, bounds=glover_bounds, constraints=glover_cons, lhs_constraints=options, use_diagonal=False)
 			#except:
 			# f.write("TRIAL FAILED - FAILURE DURING MODELING\n")
@@ -96,14 +96,17 @@ def run_trials(trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 			else:
 				results = cur_solver.solve_model(m[0])
 
-				#retrieve info from solving instance
+			#retrieve info from solving instance
 			instance_setup_time = m[1]
 			instance_solve_time = results.get("solve_time")
 			instace_obj_val = results.get("objective_value")
 			instace_int_gap = results.get("integrality_gap")
 			instance_relax = results.get("relaxed_solution")
+			time_limit = results.get("time_limit")
 			instance_total_time = instance_setup_time + instance_solve_time
 			#print instance solve info to log file
+			if(time_limit):
+				f.write("TIME LIMIT REACHED\n")
 			f.write("Integer Solution: " + str(instace_obj_val)+"\n")
 			f.write("Continuous Solution: " + str(instance_relax)+"\n")
 			f.write("Integrality Gap: " + str(instace_int_gap)+"\n")
@@ -152,13 +155,14 @@ if __name__=="__main__":
 	"""
 	start = timer()
 	num_trials = 10
-	sizes = [20,50,60,70,80,90,100,110]
-	densities = [50,75,100]
+	sizes = [30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]
+	densities = [25]
 	solvers = ["cplex"]
-	types = ["QKP"]
+	types = ["KQKP"]
 	bounds = ["tight"]
 	cons = ["sub1"]
 	methods = ["std"]
+	signs = [False, True]
 	data = []
 	for solve_with in solvers:
 		for i in sizes:
@@ -167,17 +171,92 @@ if __name__=="__main__":
 					for bound in bounds:
 						for con in cons:
 							for method in methods:
-								print("running-( {} , {} , {} , {} , {} , {} , {} )".format(solve_with.upper(),i,j,type,method,bound,con))
-								dict = run_trials(trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
-												glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False, mixed_sign=False)
-								data.append(dict)
+								for sign in signs:
+									print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} )".format(solve_with.upper(),i,j,type,method,"FALSE",sign))
+									dict = run_trials(trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
+													glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False, mixed_sign=sign)
+									data.append(dict)
+									print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} )".format(solve_with.upper(),i,j,type,method,"TRUE",sign))
+									dict = run_trials(trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
+													glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=1, reorder=False, mixed_sign=sign)
+									data.append(dict)
+									#repeadetely save to DF so we don't lose any data
+									df = pd.DataFrame(data)
+									df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
+									 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
+									df.to_pickle('dataframes/stdcons.pkl')
+
+	sizes = [30,35,40,45,50,55,60,65,70,75,80,85,90]
+	densities = [50]
+	for solve_with in solvers:
+		for i in sizes:
+			for j in densities:
+				for type in types:
+					for bound in bounds:
+						for con in cons:
+							for method in methods:
+								for sign in signs:
+									print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} )".format(solve_with.upper(),i,j,type,method,"FALSE",sign))
+									dict = run_trials(trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
+													glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False, mixed_sign=sign)
+									data.append(dict)
+									print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} )".format(solve_with.upper(),i,j,type,method,"TRUE",sign))
+									dict = run_trials(trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
+													glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=1, reorder=False, mixed_sign=sign)
+									data.append(dict)
+									#repeadetely save to DF so we don't lose any data
+									df = pd.DataFrame(data)
+									df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
+									 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
+									df.to_pickle('dataframes/stdcons.pkl')
 
 
-								#repeadetely save to DF so we don't lose any data
-								df = pd.DataFrame(data)
-								df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
-								 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-								df.to_pickle('dataframes/testing.pkl')
+	sizes = [30,35,40,45,50,55,60,65,70,75,80]
+	densities = [75]
+	for solve_with in solvers:
+		for i in sizes:
+			for j in densities:
+				for type in types:
+					for bound in bounds:
+						for con in cons:
+							for method in methods:
+								for sign in signs:
+									print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} )".format(solve_with.upper(),i,j,type,method,"FALSE",sign))
+									dict = run_trials(trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
+													glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False, mixed_sign=sign)
+									data.append(dict)
+									print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} )".format(solve_with.upper(),i,j,type,method,"TRUE",sign))
+									dict = run_trials(trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
+													glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=1, reorder=False, mixed_sign=sign)
+									data.append(dict)
+									#repeadetely save to DF so we don't lose any data
+									df = pd.DataFrame(data)
+									df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
+									 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
+									df.to_pickle('dataframes/stdcons.pkl')
+	sizes = [30,35,40,45,50,55,60,65,70,75,80,85,90,95,100]
+	densities = [100]
+	for solve_with in solvers:
+		for i in sizes:
+			for j in densities:
+				for type in types:
+					for bound in bounds:
+						for con in cons:
+							for method in methods:
+								for sign in signs:
+									print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} )".format(solve_with.upper(),i,j,type,method,"FALSE",sign))
+									dict = run_trials(trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
+													glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=0, reorder=False, mixed_sign=sign)
+									data.append(dict)
+									print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} )".format(solve_with.upper(),i,j,type,method,"TRUE",sign))
+									dict = run_trials(trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
+													glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=1, options=1, reorder=False, mixed_sign=sign)
+									data.append(dict)
+									#repeadetely save to DF so we don't lose any data
+									df = pd.DataFrame(data)
+									df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
+									 "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
+									df.to_pickle('dataframes/stdcons.pkl')
 
 	#save to excel file (name = timestamp)
 	time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")

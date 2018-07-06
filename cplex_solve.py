@@ -492,11 +492,15 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 def solve_model(model, solve_relax=True):
 	#use with block to automatically call m.end() when finished
 	with model as m:
+		time_limit = False
 		m.set_time_limit(3600)
 		#TODO time limit for gurobi as well
+		#TODO print something when time limit reached
 		start = timer()
 		m.solve()
 		end = timer()
+		if("FEASIBLE" in str(m.get_solve_status())):
+			time_limit=True
 		solve_time = end-start
 		objective_value = m.objective_value
 		#print(objective_value)
@@ -534,7 +538,8 @@ def solve_model(model, solve_relax=True):
 	results = {"solve_time":solve_time,
 				"objective_value":objective_value,
 				"relaxed_solution":continuous_obj_value,
-				"integrality_gap":integrality_gap}
+				"integrality_gap":integrality_gap,
+				"time_limit":time_limit}
 	return results
 
 def no_linearization(quad, **kwargs):
