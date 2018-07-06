@@ -492,6 +492,8 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 def solve_model(model, solve_relax=True):
 	#use with block to automatically call m.end() when finished
 	with model as m:
+		m.set_time_limit(3600)
+		#TODO time limit for gurobi as well
 		start = timer()
 		m.solve()
 		end = timer()

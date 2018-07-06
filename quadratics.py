@@ -72,16 +72,35 @@ class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 	def __init__(self, seed=0, n=10, m=1, density=100, symmetric=False, k_item=False, mixed_sign=False):
 		super().__init__(seed_=seed, n_=n, m_=m, density_=density, symmetric_=symmetric, k_item_=k_item)
 
-		#item weights
-		self.a = np.random.randint(low=1, high=51, size=(m, n))
-		#knapsack capacity(s)
-		for i in range(m):
-			self.b.append(np.random.randint(low=50, high=np.sum(self.a[i])+1))
-
-		#KQKP num_items constraint
 		if k_item:
-			#Note: upper bound used in org paper fpor kitem was: high=30*self.num_items[i]
-			self.num_items = (np.random.randint(low=2, high=int(n/4)+1))
+			self.b.append(-1)
+			while(True):
+				#item weights
+				self.a = np.random.randint(low=1, high=101, size=(m, n))
+				self.num_items = (np.random.randint(low=2, high=int(n/4)+1))
+				#self.b.append(np.random.randint(low=50, high=np.sum(self.a)))
+				self.b[0]=(np.random.randint(low=50, high=(30*self.num_items)+1))
+				copy = self.a.copy()
+				copy.sort()
+				copy = copy[0].tolist()
+				count = 0
+				i = 0
+				kmax = n
+				for weight in copy:
+					if(count+weight > self.b[0]):
+						kmax = i
+						break
+					i+=1
+					count+=weight
+				if self.num_items < kmax:
+					break
+		else:
+			self.a = np.random.randint(low=1, high=101, size=(m, n))
+			#knapsack capacity(s)
+			for i in range(m):
+				#Note: upper bound used in org paper fpor kitem was: high=30*self.num_items
+				self.b.append(np.random.randint(low=50, high=np.sum(self.a[i])+1))
+
 
 		#item values
 		for i in range(n):
