@@ -26,7 +26,7 @@ def standard_linearization(quad, lhs_constraints=True, **kwargs):
 
 	#k_item constraint if necessary (if KQKP or HSP)
 	if quad.num_items > 0:
-		m.addConstr(xp.Sum(x[i] for i in range(n)) == quad.num_items)
+		m.addConstraint(xp.Sum(x[i] for i in range(n)) == quad.num_items)
 
 	# add auxiliary constraints
 	for i in range(n):
@@ -503,15 +503,20 @@ def solve_model(m, solve_relax=True):
 	# turn off model output. otherwise prints bunch of info, clogs console
 	#m.setParam('OutputFlag', 0)
 	m.setlogfile("xpress.log")
+	time_limit = False
 	# start timer and solve model
+	m.controls.maxtime = 3600
 	start = timer()
 	m.solve()
 	end = timer()
+	if m.attributes.xslp_status and xp.xslp_maxtime:
+		print('time limit exceeded')
+		time_limit=True
 	solve_time = end-start
 	objective_value = m.getObjVal()
 
 
-	if solve_relax:
+	if solve_relax and solve_time < 3400:
 		# relax and solve to get continuous relaxation and integrality_gap
 		#TODO fogure out how to do continous relax with xpress
 		#cols = []
@@ -522,7 +527,7 @@ def solve_model(m, solve_relax=True):
 		#print(bin_cols)
 		#m.chgcoltype(range(10),['C','C','C','C','C','C','C','C','C','C'])
 		vars = m.getVariable()
-		#TODO this is inneficient 
+		#TODO this is inneficient
 		for index,var in enumerate(vars):
 			if var.vartype == 1: #1 means binary
 				m.chgcoltype([index],['C'])
@@ -541,7 +546,8 @@ def solve_model(m, solve_relax=True):
 	results = {"solve_time": solve_time,
 			   "objective_value": objective_value,
 			   "relaxed_solution": continuous_obj_value,
-			   "integrality_gap": integrality_gap}
+			   "integrality_gap": integrality_gap,
+				"time_limit":time_limit}
 	return results
 
 def no_linearization(quad, **kwargs):
@@ -684,6 +690,6 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	#return model
 	return [mdl,setup_time]
 
-p = Knapsack()
-m = standard_linearization(p)[0]
-print(solve_model(m, solve_relax=True))
+# p = Knapsack()
+# m = standard_linearization(p)[0]
+# print(solve_model(m, solve_relax=True))

@@ -15,7 +15,7 @@ import os
 # plt.show()
 
 #read in dataframe
-df = pd.read_pickle("dataframes/stdcons.pkl")
+df = pd.read_pickle("dataframes/test.pkl")
 print(df)
 
 #save dataframe to excel file
@@ -25,7 +25,7 @@ writer = pd.ExcelWriter("reports/"+excel_filename, engine='xlsxwriter')
 df.to_excel(writer, index=False, sheet_name='Sheet1')
 workbook = writer.book
 worksheet = writer.sheets['Sheet1']
-worksheet.conditional_format('P2:P100',{'type':'3_color_scale', 'min_color':'green', 'max_color':'red'})
+worksheet.conditional_format('P2:P1000',{'type':'3_color_scale', 'min_color':'green', 'max_color':'red'})
 writer.save()
 
 #open the excel file for viewing

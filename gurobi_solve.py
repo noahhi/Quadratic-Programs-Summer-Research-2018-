@@ -502,7 +502,8 @@ def solve_model(m, solve_relax=True):
 	"""
 	# turn off model output. otherwise prints bunch of info, clogs console
 	#m.setParam('OutputFlag', 0)
-
+	time_limit = False
+	m.setParam('TimeLimit',3600)
 	# start timer and solve model
 	start = timer()
 	m.optimize()
@@ -510,7 +511,7 @@ def solve_model(m, solve_relax=True):
 	solve_time = end-start
 	objective_value = m.objVal
 
-	if solve_relax:
+	if solve_relax and solve_time < 3400:
 		# relax and solve to get continuous relaxation and integrality_gap
 		vars = m.getVars()
 		for var in vars:
@@ -531,7 +532,8 @@ def solve_model(m, solve_relax=True):
 	results = {"solve_time": solve_time,
 			   "objective_value": objective_value,
 			   "relaxed_solution": continuous_obj_value,
-			   "integrality_gap": integrality_gap}
+			   "integrality_gap": integrality_gap,
+				"time_limit":time_limit}
 	return results
 
 def no_linearization(quad, **kwargs):
