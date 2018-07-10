@@ -135,7 +135,8 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 			results = {"trial":i, "solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "instance_gap":instance_int_gap,
 					"instance_total_time":instance_total_time, "instance_obj_val":instance_obj_val, "symmetric": symmetric,
 					 "instance_setup_time": instance_setup_time,"instance_solve_time": instance_solve_time, "glover_bounds": glover_bounds,
-					  "mixed_sign": mixed_sign, "reorder":reorder, "multiple":multiple, "glover_cons":glover_cons}
+					  "mixed_sign": mixed_sign, "reorder":reorder, "multiple":multiple, "glover_cons":glover_cons, "id":filename}
+					  #TODO make id auto not include whatever variable we are looking at. 
 			data_.append(results)
 			#TODO this list is going to get huge....
 
@@ -172,7 +173,7 @@ if __name__=="__main__":
 	num_trials = 5
 	sizes = [75]
 	densities = [25,50,75,100]
-	solvers = ["cplex", "xpress", "gurobi"]
+	solvers = ["xpress", "cplex", "gurobi"]
 	types = ["KQKP"]
 	bounds = ["-"]
 	cons = ["-"]
@@ -180,8 +181,8 @@ if __name__=="__main__":
 	signs = [False, True]
 	multiples = [1]
 	data = []
-	for solve_with in solvers:
-		for j in densities:
+	for j in densities:
+		for solve_with in solvers:
 			for i in sizes:
 				for type in types:
 					for bound in bounds:
