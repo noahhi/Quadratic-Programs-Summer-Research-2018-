@@ -5,6 +5,7 @@ from gurobipy import *
 
 # turn off model output. otherwise prints bunch of info, clogs console
 setParam('OutputFlag',0)
+setParam('LogFile',"")
 
 def standard_linearization(quad, lhs_constraints=True, **kwargs):
 	start = timer()

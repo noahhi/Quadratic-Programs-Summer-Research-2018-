@@ -1,3 +1,5 @@
+
+.c9/
 #ignore log files
 gurobi.log
 log/

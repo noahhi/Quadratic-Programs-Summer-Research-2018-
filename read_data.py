@@ -4,22 +4,27 @@ import matplotlib.pyplot as plt
 import time
 import sys
 import os
-# data=pd.read_excel(open("C:/Users/huntisan/Desktop/summer2018/std_glove_data.xlsx", "rb"))
-# relevant_data = data.loc[:,["method", "size", "avg_solve_time"]]
-# big_sizes = relevant_data.loc[:, "size"] > 90
-# big_sizes = relevant_data[big_sizes]
-# print(big_sizes)
-#
-# x = big_sizes.loc[:,"size"]
-# y = big_sizes.loc[:,"avg_solve_time"]
-# plt.scatter(x,y)
-# plt.show()
 
-#read in dataframe
-df = pd.read_pickle("dataframes/test1.pkl")
-#print(df)
+
+def write_report(df):
+    #save dataframe to excel file
+    time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
+    excel_filename = time_stamp+'-report.xlsx'
+    writer = pd.ExcelWriter("reports/"+excel_filename, engine='xlsxwriter')
+    df.to_excel(writer, index=False, sheet_name='Sheet1')
+    workbook = writer.book
+    worksheet = writer.sheets['Sheet1']
+    worksheet.conditional_format('P2:P1000',{'type':'3_color_scale', 'min_color':'green', 'max_color':'red'})
+    writer.save()
+
+    #open the excel file for viewing
+    os.chdir("reports")
+    os.system(excel_filename)
 
 def convert(df):
+    """
+    convert run_trials report into form for performnace profile generation
+    """
     form1rows = df[df["solver"]=="xpress"]
     form1times = form1rows["instance_solve_time"].tolist()
     form2rows = df[df["solver"]=="cplex"]
@@ -27,51 +32,48 @@ def convert(df):
     df = pd.DataFrame({'form1':form1times,'form2':form2times})
     return df
 
+def performance_profile(df):
+    #retrieve # of problem instances (ni), and # of formulations (nf)
+    [ni, nf] = df.shape
+    T = df.values
+
+    #best solve time for each problem instance
+    minperf = np.zeros(ni)
+    for i in range(ni):
+        minperf[i] = np.nanmin(T[i])
+
+    #compute ratios
+    r = np.zeros((ni, nf))
+    for p in range(ni):
+        r[p,:] = T[p,:]/minperf[p]
+    max_ratio = np.nanmax(r)
+
+    #replace nan vals with 2*maxratio
+    nan_indices = np.isnan(r)
+    r[nan_indices] = 2*max_ratio
+    r.sort(axis=0)
+
+    yf = np.zeros(ni)
+    for i in range(ni):
+        yf[i] = i/ni
+
+    for f in range(nf):
+        xf = r[:,f]
+        plt.plot(xf,yf)
+    plt.show()
+
+#read in dataframe
+df = pd.read_pickle("dataframes/test.pkl")
+
+mypath = "data/{}".format("")
+if not os.path.isdir():
+    os.makedirs(mypath)
+    df.to_pickle('mypath/test.pkl')
+
+write_report(df)
 df = convert(df)
-# print(df)
-# #save dataframe to excel file
-# time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
-# excel_filename = time_stamp+'-report.xlsx'
-# writer = pd.ExcelWriter("reports/"+excel_filename, engine='xlsxwriter')
-# df.to_excel(writer, index=False, sheet_name='Sheet1')
-# workbook = writer.book
-# worksheet = writer.sheets['Sheet1']
-# worksheet.conditional_format('P2:P1000',{'type':'3_color_scale', 'min_color':'green', 'max_color':'red'})
-# writer.save()
-#
-# #open the excel file for viewing
-# os.chdir("reports")
-# os.system(excel_filename)
+performance_profile(df)
 
-
-#retrieve # of problem instances (ni), and # of formulations (nf)
-[ni, nf] = df.shape
-T = df.values
-
-#best solve time for each problem instance
-minperf = np.zeros(ni)
-for i in range(ni):
-    minperf[i] = np.nanmin(T[i])
-
-#compute ratios
-r = np.zeros((ni, nf))
-for p in range(ni):
-    r[p,:] = T[p,:]/minperf[p]
-max_ratio = np.nanmax(r)
-
-#replace nan vals with 2*maxratio
-nan_indices = np.isnan(r)
-r[nan_indices] = 2*max_ratio
-r.sort(axis=0)
-
-yf = np.zeros(ni)
-for i in range(ni):
-    yf[i] = i/ni
-
-for f in range(nf):
-    xf = r[:,f]
-    plt.plot(xf,yf)
-plt.show()
 
 #pre converted DF
 # #get number of rows and number of problems
@@ -126,4 +128,16 @@ plt.show()
 #
 # plt.plot(sorted_org.values)
 # plt.plot(sorted_tight.values)
+# plt.show()
+
+
+# data=pd.read_excel(open("C:/Users/huntisan/Desktop/summer2018/std_glove_data.xlsx", "rb"))
+# relevant_data = data.loc[:,["method", "size", "avg_solve_time"]]
+# big_sizes = relevant_data.loc[:, "size"] > 90
+# big_sizes = relevant_data[big_sizes]
+# print(big_sizes)
+#
+# x = big_sizes.loc[:,"size"]
+# y = big_sizes.loc[:,"avg_solve_time"]
+# plt.scatter(x,y)
 # plt.show()

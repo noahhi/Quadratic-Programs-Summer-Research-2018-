@@ -136,7 +136,7 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 					"instance_total_time":instance_total_time, "instance_obj_val":instance_obj_val, "symmetric": symmetric,
 					 "instance_setup_time": instance_setup_time,"instance_solve_time": instance_solve_time, "glover_bounds": glover_bounds,
 					  "mixed_sign": mixed_sign, "reorder":reorder, "multiple":multiple, "glover_cons":glover_cons, "id":filename}
-					  #TODO make id auto not include whatever variable we are looking at. 
+					  #TODO make id auto not include whatever variable we are looking at.
 			data_.append(results)
 			#TODO this list is going to get huge....
 
@@ -205,13 +205,13 @@ if __name__=="__main__":
 										#df.to_pickle('dataframes/testing.pkl')
 
 	#save to excel file (name = timestamp)
-	time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
-	excel_filename = "reports/"+time_stamp+'-report.xlsx'
-	writer = pd.ExcelWriter(excel_filename, engine='xlsxwriter')
-	df.to_excel(writer, index=False)
-	writer.save()
-	end = timer()
-	print(df)
+	# time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
+	# excel_filename = "reports/"+time_stamp+'-report.xlsx'
+	# writer = pd.ExcelWriter(excel_filename, engine='xlsxwriter')
+	# df.to_excel(writer, index=False)
+	# writer.save()
+	# end = timer()
+	# print(df)
 	print("took {:.3} seconds to run all trials".format(end-start))
 
 
