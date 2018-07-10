@@ -6,11 +6,14 @@ import sys
 import os
 
 
-def write_report(df):
+def write_report(df, save_loc):
+
+    #time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
+    #excel_filename = time_stamp+'-report.xlsx'
+    #writer = pd.ExcelWriter("reports/"+excel_filename, engine='xlsxwriter')
+
     #save dataframe to excel file
-    time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
-    excel_filename = time_stamp+'-report.xlsx'
-    writer = pd.ExcelWriter("reports/"+excel_filename, engine='xlsxwriter')
+    writer = pd.ExcelWriter(save_loc+"report.xlsx", engine='xlsxwriter')
     df.to_excel(writer, index=False, sheet_name='Sheet1')
     workbook = writer.book
     worksheet = writer.sheets['Sheet1']
@@ -18,8 +21,8 @@ def write_report(df):
     writer.save()
 
     #open the excel file for viewing
-    os.chdir("reports")
-    os.system(excel_filename)
+    #os.chdir("reports")
+    #os.system(excel_filename)
 
 def convert(df):
     """
@@ -32,7 +35,7 @@ def convert(df):
     df = pd.DataFrame({'form1':form1times,'form2':form2times})
     return df
 
-def performance_profile(df):
+def performance_profile(df, save_loc):
     #retrieve # of problem instances (ni), and # of formulations (nf)
     [ni, nf] = df.shape
     T = df.values
@@ -60,19 +63,19 @@ def performance_profile(df):
     for f in range(nf):
         xf = r[:,f]
         plt.plot(xf,yf)
-    plt.show()
+    #plt.show()
+    plt.savefig(save_loc+"performance_profile")
 
 #read in dataframe
 df = pd.read_pickle("dataframes/test.pkl")
 
-mypath = "data/{}".format("")
-if not os.path.isdir():
+mypath = "data/{}/".format("test")
+if not os.path.isdir(mypath):
     os.makedirs(mypath)
-    df.to_pickle('mypath/test.pkl')
-
-write_report(df)
-df = convert(df)
-performance_profile(df)
+    df.to_pickle(mypath+'/test.pkl')
+    write_report(df, save_loc=mypath)
+    df = convert(df)
+    performance_profile(df, save_loc=mypath)
 
 
 #pre converted DF

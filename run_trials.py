@@ -171,14 +171,14 @@ if __name__=="__main__":
 	"""
 	start = timer()
 	num_trials = 5
-	sizes = [75]
+	sizes = [50]
 	densities = [25,50,75,100]
 	solvers = ["xpress", "cplex", "gurobi"]
-	types = ["KQKP"]
+	types = ["UQP"]
 	bounds = ["-"]
 	cons = ["-"]
 	methods = ["std"]
-	signs = [False, True]
+	signs = ["-"]
 	multiples = [1]
 	data = []
 	for j in densities:
