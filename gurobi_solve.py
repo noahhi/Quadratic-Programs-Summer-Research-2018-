@@ -508,10 +508,13 @@ def solve_model(m, solve_relax=True):
 	start = timer()
 	m.optimize()
 	end = timer()
+	if(m.status == 9):
+		print('time limit exceeded')
+		time_limit=True
 	solve_time = end-start
 	objective_value = m.objVal
 
-	if solve_relax and solve_time < 3400:
+	if solve_relax and not time_limit:
 		# relax and solve to get continuous relaxation and integrality_gap
 		vars = m.getVars()
 		for var in vars:
@@ -681,3 +684,7 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 # print(solve_model(m, solve_relax=False))
 # m = standard_linearization(p)[0]
 # print(solve_model(m))
+
+# p = Knapsack(n=200)
+# m = standard_linearization(p)[0]
+# print(solve_model(m, solve_relax=True))

@@ -509,14 +509,14 @@ def solve_model(m, solve_relax=True):
 	start = timer()
 	m.solve()
 	end = timer()
-	if m.attributes.xslp_status and xp.xslp_maxtime:
+	if("optimal" not in str(m.getProbStatusString())):
 		print('time limit exceeded')
 		time_limit=True
 	solve_time = end-start
 	objective_value = m.getObjVal()
 
 
-	if solve_relax and solve_time < 3400:
+	if solve_relax and not time_limit:
 		# relax and solve to get continuous relaxation and integrality_gap
 		#TODO fogure out how to do continous relax with xpress
 		#cols = []
@@ -539,7 +539,7 @@ def solve_model(m, solve_relax=True):
 		continuous_obj_value = -1
 		integrality_gap = -1
 	# terminate model so not allocating resources
-	#m.unconstruct()
+	#m.close()
 
 
 	# create and return results dictionary
@@ -689,7 +689,3 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 
 	#return model
 	return [mdl,setup_time]
-
-# p = Knapsack()
-# m = standard_linearization(p)[0]
-# print(solve_model(m, solve_relax=True))

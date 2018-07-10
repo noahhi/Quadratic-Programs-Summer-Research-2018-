@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import time
 import sys
@@ -15,24 +16,100 @@ import os
 # plt.show()
 
 #read in dataframe
-df = pd.read_pickle("dataframes/test.pkl")
-print(df)
+df = pd.read_pickle("dataframes/test1.pkl")
+#print(df)
 
-#save dataframe to excel file
-time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
-excel_filename = time_stamp+'-report.xlsx'
-writer = pd.ExcelWriter("reports/"+excel_filename, engine='xlsxwriter')
-df.to_excel(writer, index=False, sheet_name='Sheet1')
-workbook = writer.book
-worksheet = writer.sheets['Sheet1']
-worksheet.conditional_format('P2:P1000',{'type':'3_color_scale', 'min_color':'green', 'max_color':'red'})
-writer.save()
+def convert(df):
+    form1rows = df[df["solver"]=="xpress"]
+    form1times = form1rows["instance_solve_time"].tolist()
+    form2rows = df[df["solver"]=="cplex"]
+    form2times = form2rows["instance_solve_time"].tolist()
+    df = pd.DataFrame({'form1':form1times,'form2':form2times})
+    return df
 
-#open the excel file for viewing
-os.chdir("reports")
-os.system(excel_filename)
+df = convert(df)
+# print(df)
+# #save dataframe to excel file
+# time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
+# excel_filename = time_stamp+'-report.xlsx'
+# writer = pd.ExcelWriter("reports/"+excel_filename, engine='xlsxwriter')
+# df.to_excel(writer, index=False, sheet_name='Sheet1')
+# workbook = writer.book
+# worksheet = writer.sheets['Sheet1']
+# worksheet.conditional_format('P2:P1000',{'type':'3_color_scale', 'min_color':'green', 'max_color':'red'})
+# writer.save()
+#
+# #open the excel file for viewing
+# os.chdir("reports")
+# os.system(excel_filename)
 
-#retrieve desired rows using boolean/mask indexing
+
+#retrieve # of problem instances (ni), and # of formulations (nf)
+[ni, nf] = df.shape
+T = df.values
+
+#best solve time for each problem instance
+minperf = np.zeros(ni)
+for i in range(ni):
+    minperf[i] = np.nanmin(T[i])
+
+#compute ratios
+r = np.zeros((ni, nf))
+for p in range(ni):
+    r[p,:] = T[p,:]/minperf[p]
+max_ratio = np.nanmax(r)
+
+#replace nan vals with 2*maxratio
+nan_indices = np.isnan(r)
+r[nan_indices] = 2*max_ratio
+r.sort(axis=0)
+
+yf = np.zeros(ni)
+for i in range(ni):
+    yf[i] = i/ni
+
+for f in range(nf):
+    xf = r[:,f]
+    plt.plot(xf,yf)
+plt.show()
+
+#pre converted DF
+# #get number of rows and number of problems
+# shape = df.shape
+# n = shape[0]
+# p = int(n/2)
+#
+# #retrieve desired rows using boolean/mask indexing
+# all4cons = df[df["options"]==0]
+# all4con_times = all4cons["instance_solve_time"]
+# signdep = df[df["options"]==1]
+# signdep_times = signdep["instance_solve_time"]
+#
+# #compute min times for each problem
+# mintimes = np.zeros(p)
+# for i, times in enumerate(zip(all4con_times, signdep_times)):
+#     mintimes[i] = min(times[0], times[1])
+#
+# #compute performance ratios
+# r4 = np.zeros(p)
+# for i,t in enumerate(all4con_times):
+#     r4[i] = t/mintimes[i]
+# r2 = np.zeros(p)
+# for i,t in enumerate(signdep_times):
+#     r2[i] = t/mintimes[i]
+#
+# #compute rmax, and replace nan values with 2*rmax
+# rmax = 2*max(np.nanmax(r2),np.nanmax(r4))
+# r4[np.isnan(r4)] = rmax*2
+# r2[np.isnan(r2)] = rmax*2
+#
+# #sort
+# r4 = np.sort(r4)
+# r2 = np.sort(r2)
+
+
+
+
 # org_bounds = df[df["glover_bounds"]=="original"]
 # tight_bounds = df[df["glover_bounds"]=="tight"]
 #
