@@ -19,7 +19,6 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 	#need individual run time to compute standard deviation
 	instance_total_times = []
 
-	#write data to log file with descriptive name TODO make this more unique name
 	#description = solver+"-"+type+"-"+str(method)+"-"+str(size)+"-"+str(den)+"-"+str(multiple)+'-'+str(glover_bounds)+"-"+glover_cons+"-"+options
 	description = "{}-{}-{}-{}-{}-{}-{}-{}-{}-{}-{}".format(solver,type,symmetric,method,size,den,multiple,options,glover_bounds,glover_cons,mixed_sign)
 	filename = "log/"+description+".txt"
@@ -81,10 +80,6 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 					return cur_solver.no_linearization
 				else:
 					raise Exception(str(method_) + " is not a valid method type")
-
-			#m[0].log_output = True
-			#m[0].set_time_limit(3600) #10800=3 hours #TODO need to output warning here. also implement for gurobi
-			#TODO cons1-4 for std should be able to be turned off/on
 
 			cur_method = get_method(method)
 			#try:

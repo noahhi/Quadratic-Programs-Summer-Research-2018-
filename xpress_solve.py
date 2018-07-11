@@ -527,7 +527,6 @@ def solve_model(m, solve_relax=True):
 
 	if solve_relax and not time_limit:
 		# relax and solve to get continuous relaxation and integrality_gap
-		#TODO fogure out how to do continous relax with xpress
 		#cols = []
 		#m.getcoltype(cols,0,m.attributes.cols-1)
 		#print(cols)
@@ -564,7 +563,9 @@ def no_linearization(quad, **kwargs):
 	n = quad.n
 	c = quad.c
 	m = xp.problem(name='no_linearization')
-	x = m.addVars(n, name="binary_var", vtype=GRB.BINARY)
+	x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
+	m.addVariable(x)
+
 	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
 		#add capacity constraint(s)
 		for k in range(quad.m):
@@ -597,9 +598,11 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	e = qsap.e
 	c = qsap.c
 	mdl = xp.problem(name='qsap_glovers')
-	x = mdl.addVars(m,n,name="binary_var", vtype=GRB.BINARY)
+	#x = mdl.addVars(m,n,name="binary_var", vtype=GRB.BINARY)
+	#TODO possibly need to flip order of loops and/or reshape here
+	x = np.array([xp.var(vartype=xp.binary) for i in range(m) for j in range(n)]).reshape(m,n)
+	mdl.addVariable(x)
 	mdl.addConstraint((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
-
 	#let gurobi solve w/ quadratic objective function
 	# mdl.setObjective(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
 	# 			+ sum(sum(sum(sum(c[i,k,j,l]*x[i,k]*x[j,l] for l in range(n))for k in range(n))
@@ -632,21 +635,27 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 					L1[i,k] = L0[i,k] + col[i,k]
 	elif bounds=="tight" or bounds=="tighter":
 		u_bound_mdl = xp.problem(name="u_bound_m")
+		u_bound_mdl.setlogfile("xpress.log")
 		l_bound_mdl = xp.problem(name="l_bound_m")
+		l_bound_mdl.setlogfile("xpress.log")
 		if bounds=="tight":
-			u_bound_x = u_bound_mdl.addVars(keys1=m,keys2=n,ub=1,lb=0)
-			l_bound_x = l_bound_mdl.addVars(keys1=m,keys2=n,ub=1,lb=0)
+			u_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
+			l_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
 		elif bounds == "tighter":
-			u_bound_x = u_bound_mdl.addVars(keys1=m,keys2=n, vtype=GRB.BINARY)
-			l_bound_x = l_bound_mdl.addVars(keys1=m,keys2=n, vtype=GRB.BINARY)
+			u_bound_x = np.array([xp.var(vartype=xp.binary, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
+			l_bound_x = np.array([xp.var(vartype=xp.binary, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
+		u_bound_mdl.addVariable(u_bound_x)
+		l_bound_mdl.addVariable(l_bound_x)
 		u_bound_mdl.addConstraint((xp.Sum(u_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
 		l_bound_mdl.addConstraint((xp.Sum(l_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
 		for i in range(m-1):
 			for k in range(n):
 				u_bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*u_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.maximize)
-				l_bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*l_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.maximize)
-				u_con = u_bound_mdl.addConstraint(u_bound_x[i,k]==1)
-				l_con = l_bound_mdl.addConstraint(l_bound_x[i,k]==0)
+				l_bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*l_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.minimize)
+				u_con = u_bound_x[i,k] == 1
+				u_bound_mdl.addConstraint(u_con)
+				l_con = l_bound_x[i,k] == 0
+				l_bound_mdl.addConstraint(l_con)
 				u_bound_mdl.solve()
 				l_bound_mdl.solve()
 				U1[i,k] = u_bound_mdl.getObjVal()
@@ -654,8 +663,10 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 				u_bound_mdl.delConstraint(u_con)
 				l_bound_mdl.delConstraint(l_con)
 				if lhs_constraints:
-					u_con = u_bound_mdl.addConstraint(u_bound_x[i,k] == 0)
-					l_con = l_bound_mdl.addConstraint(l_bound_x[i,k] == 1)
+					u_con = u_bound_x[i,k] == 0
+					u_bound_mdl.addConstraint(u_con)
+					l_con = l_bound_x[i,k] == 1
+					l_bound_mdl.addConstraint(l_con)
 					u_bound_mdl.solve()
 					l_bound_mdl.solve()
 					U0[i,k] = u_bound_mdl.getObjVal()
@@ -667,7 +678,8 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 
 	#add auxiliary constrains
 	if constraints=="original":
-		z = mdl.addVars(m,n,lb=-GRB.INFINITY, vtype=GRB.CONTINUOUS)
+		z = np.array([xp.var(vartype=xp.continuous, lb=-xp.infinity) for i in range(m) for j in range(n)]).reshape(m,n)
+		mdl.addVariable(z)
 		mdl.addConstraint(z[i,k] <= x[i,k]*U1[i,k] for i in range(m-1) for k in range(n))
 		mdl.addConstraint(z[i,k] <= xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
 										-L0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
@@ -678,13 +690,15 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 		mdl.setObjective(xp.Sum(xp.Sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
 					+ xp.Sum(xp.Sum(z[i,k] for k in range(n)) for i in range(m-1)), sense=xp.maximize)
 	elif constraints=="sub1":
-		s = mdl.addVars(m,n,lb=0)
+		s = np.array([xp.var(vartype=xp.continuous, lb=0) for i in range(m) for j in range(n)]).reshape(m,n)
+		mdl.addVariable(s)
 		mdl.addConstraint(s[i,k] >= U1[i,k]*x[i,k]+L0[i,k]*(1-x[i,k])-xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
 						for k in range(n) for i in range(m-1))
 		mdl.setObjective(xp.Sum(xp.Sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
 					+ xp.Sum(xp.Sum(U1[i,k]*x[i,k]-s[i,k] for k in range(n)) for i in range(m-1)), sense=xp.maximize)
 	elif constraints=="sub2":
-		s = mdl.addVars(m,n,lb=0)
+		s = np.array([xp.var(vartype=xp.continuous, lb=0) for i in range(m) for j in range(n)]).reshape(m,n)
+		mdl.addVariable(s)
 		mdl.addConstraint(s[i,k] >= -L0[i,k]*(1-x[i,k])-(x[i,k]*U1[i,k])+xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
 		 				for k in range(n) for i in range(m-1))
 		mdl.setObjective(xp.Sum(xp.Sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
@@ -698,9 +712,3 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 
 	#return model
 	return [mdl,setup_time]
-
-# p = Knapsack(n=40)
-# m = glovers_linearization(p, bounds="tighter", constraints="sub2", lhs_constraints=True)[0]
-# print(solve_model(m))
-# m = standard_linearization(p, lhs_constraints=False)[0]
-# print(solve_model(m))

@@ -494,8 +494,6 @@ def solve_model(model, solve_relax=True):
 	with model as m:
 		time_limit = False
 		m.set_time_limit(3600)
-		#TODO time limit for gurobi as well
-		#TODO print something when time limit reached
 		start = timer()
 		m.solve()
 		end = timer()
@@ -703,6 +701,6 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 # m = glovers_linearization(p)[0]
 # print(solve_model(m))
 
-# p = Knapsack()
-# m = standard_linearization(p)[0]
-# print(solve_model(m, solve_relax=True))
+p = QSAP()
+m = qsap_glovers(p, bounds="tight", constraints="sub2", lhs_constraints=True)[0]
+print(solve_model(m))

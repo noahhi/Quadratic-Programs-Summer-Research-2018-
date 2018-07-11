@@ -616,17 +616,17 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 		u_bound_mdl = Model(name="u_bound_m")
 		l_bound_mdl = Model(name="l_bound_m")
 		if bounds=="tight":
-			u_bound_x = u_bound_mdl.addVars(keys1=m,keys2=n,ub=1,lb=0)
-			l_bound_x = l_bound_mdl.addVars(keys1=m,keys2=n,ub=1,lb=0)
+			u_bound_x = u_bound_mdl.addVars(m,n,ub=1,lb=0)
+			l_bound_x = l_bound_mdl.addVars(m,n,ub=1,lb=0)
 		elif bounds == "tighter":
-			u_bound_x = u_bound_mdl.addVars(keys1=m,keys2=n, vtype=GRB.BINARY)
-			l_bound_x = l_bound_mdl.addVars(keys1=m,keys2=n, vtype=GRB.BINARY)
+			u_bound_x = u_bound_mdl.addVars(m,n, vtype=GRB.BINARY)
+			l_bound_x = l_bound_mdl.addVars(m,n, vtype=GRB.BINARY)
 		u_bound_mdl.addConstrs((quicksum(u_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
 		l_bound_mdl.addConstrs((quicksum(l_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
 		for i in range(m-1):
 			for k in range(n):
 				u_bound_mdl.setObjective(quicksum(quicksum(c[i,k,j,l]*u_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), GRB.MAXIMIZE)
-				l_bound_mdl.setObjective(quicksum(quicksum(c[i,k,j,l]*l_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), GRB.MAXIMIZE)
+				l_bound_mdl.setObjective(quicksum(quicksum(c[i,k,j,l]*l_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), GRB.MINIMIZE)
 				u_con = u_bound_mdl.addConstr(u_bound_x[i,k]==1)
 				l_con = l_bound_mdl.addConstr(l_bound_x[i,k]==0)
 				u_bound_mdl.optimize()
@@ -680,9 +680,3 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 
 	#return model
 	return [mdl,setup_time]
-
-# p = UQP()
-# m = no_linearization(p)[0]
-# print(solve_model(m, solve_relax=False))
-# m = standard_linearization(p)[0]
-# print(solve_model(m))
