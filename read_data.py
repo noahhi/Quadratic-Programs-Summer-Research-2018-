@@ -24,18 +24,19 @@ def write_report(df, save_loc):
     #os.chdir("reports")
     #os.system(excel_filename)
 
-def convert(df):
+def performance_profile(df, save_loc):
     """
     convert run_trials report into form for performnace profile generation
     """
-    form1rows = df[df["solver"]=="xpress"]
-    form1times = form1rows["instance_solve_time"].tolist()
-    form2rows = df[df["solver"]=="cplex"]
-    form2times = form2rows["instance_solve_time"].tolist()
-    df = pd.DataFrame({'form1':form1times,'form2':form2times})
-    return df
+    variable = 'solver'
+    formulations = ['cplex', 'xpress', 'gurobi']
+    data = {}
+    for form in formulations:
+        form_rows = df[df[variable]==form]
+        form_data = form_rows["instance_solve_time"].tolist()
+        data[form] = form_data
+    df = pd.DataFrame(data)
 
-def performance_profile(df, save_loc):
     #retrieve # of problem instances (ni), and # of formulations (nf)
     [ni, nf] = df.shape
     T = df.values
@@ -60,22 +61,31 @@ def performance_profile(df, save_loc):
     for i in range(ni):
         yf[i] = i/ni
 
+    linestyles = ["solid", "dashed", "dotted", "dashdot"]
     for f in range(nf):
         xf = r[:,f]
-        plt.plot(xf,yf)
-    #plt.show()
+        plt.plot(xf,yf, drawstyle="steps", linestyle=linestyles[f])
+    plt.title("Performance Profile For {}".format(variable))
+    plt.xlabel('Performance Profile on [0,10]')
+    plt.ylabel('P(r <= t: 1 <= s <= n)')
+    plt.legend([form for form in formulations])
+
     plt.savefig(save_loc+"performance_profile")
+    plt.show()
 
 #read in dataframe
-df = pd.read_pickle("dataframes/test.pkl")
+df = pd.read_pickle("dataframes/uqp_std_cons.pkl")
 
-mypath = "data/{}/".format("test")
-if not os.path.isdir(mypath):
-    os.makedirs(mypath)
-    df.to_pickle(mypath+'/test.pkl')
+save_as = 'test'
+mypath = "data/{}/".format(save_as)
+if save_as=="test" or not os.path.isdir(mypath):
+    if not save_as=="test":
+        os.makedirs(mypath)
+    df.to_pickle(mypath+'/dataframef.pkl')
     write_report(df, save_loc=mypath)
-    df = convert(df)
     performance_profile(df, save_loc=mypath)
+else:
+    raise Exception("Save path folder {} already exists. ".format(mypath))
 
 
 #pre converted DF

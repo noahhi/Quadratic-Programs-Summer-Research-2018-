@@ -171,7 +171,7 @@ if __name__=="__main__":
 	"""
 	start = timer()
 	num_trials = 5
-	sizes = [50]
+	sizes = [75]
 	densities = [25,50,75,100]
 	solvers = ["xpress", "cplex", "gurobi"]
 	types = ["UQP"]
@@ -210,8 +210,8 @@ if __name__=="__main__":
 	# writer = pd.ExcelWriter(excel_filename, engine='xlsxwriter')
 	# df.to_excel(writer, index=False)
 	# writer.save()
-	# end = timer()
 	# print(df)
+	end = timer()
 	print("took {:.3} seconds to run all trials".format(end-start))
 
 
