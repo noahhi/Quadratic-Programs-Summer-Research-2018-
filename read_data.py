@@ -24,18 +24,21 @@ def write_report(df, save_loc):
     #os.chdir("reports")
     #os.system(excel_filename)
 
-def performance_profile(df, save_loc):
+def performance_profile(df, save_loc, variable, formulations):
     """
     convert run_trials report into form for performnace profile generation
     """
-    variable = 'solver'
-    formulations = ['cplex', 'xpress', 'gurobi']
     data = {}
     for form in formulations:
         form_rows = df[df[variable]==form]
         form_data = form_rows["instance_solve_time"].tolist()
         data[form] = form_data
     df = pd.DataFrame(data)
+
+    #save converted report as excel file
+    writer = pd.ExcelWriter(save_loc+"perf_profile_report.xlsx", engine='xlsxwriter')
+    df.to_excel(writer, index=False, sheet_name='Sheet1')
+    writer.save()
 
     #retrieve # of problem instances (ni), and # of formulations (nf)
     [ni, nf] = df.shape
@@ -73,20 +76,23 @@ def performance_profile(df, save_loc):
     plt.savefig(save_loc+"performance_profile")
     plt.show()
 
-#read in dataframe
-df = pd.read_pickle("dataframes/uqp_std_cons.pkl")
+def analyze(df_name, new_folder_name, test_variable, formulations):
+    #read in dataframe
+    df = pd.read_pickle("dataframes/{}.pkl".format(df_name))
 
-save_as = 'test'
-mypath = "data/{}/".format(save_as)
-if save_as=="test" or not os.path.isdir(mypath):
-    if not save_as=="test":
-        os.makedirs(mypath)
-    df.to_pickle(mypath+'/dataframef.pkl')
-    write_report(df, save_loc=mypath)
-    performance_profile(df, save_loc=mypath)
-else:
-    raise Exception("Save path folder {} already exists. ".format(mypath))
+    mypath = "data/{}/".format(new_folder_name)
+    if new_folder_name=="test" or not os.path.isdir(mypath):
+        if not new_folder_name=="test":
+            os.makedirs(mypath)
+        df.to_pickle(mypath+'/dataframe.pkl')
+        write_report(df, save_loc=mypath)
+        performance_profile(df, save_loc=mypath, variable=test_variable, formulations=formulations)
+    else:
+        raise Exception("Save path folder {} already exists. ".format(mypath))
 
+
+analyze(df_name='uqp_std_cons', new_folder_name='uqp_std_cons', test_variable="solver", formulations=['cplex', 'xpress', 'gurobi'])
+#analyze(df_name='uqp_std_cons', new_folder_name='uqp_std_cons', test_variable="options", formulations=[0, 1])
 
 #pre converted DF
 # #get number of rows and number of problems

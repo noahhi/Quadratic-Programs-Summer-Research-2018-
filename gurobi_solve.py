@@ -207,7 +207,8 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 		if constraints=="sub1":
 			m.setObjective(quicksum(c[i]*x[i] + (U1[i]*x[i]-s[i]) for i in range(n)), GRB.MAXIMIZE)
 		else:
-			m.setObjective(quicksum(c[i]*x[i] + quicksum(C[i, j]*x[j] for j in range(n))-L0[i]*(1-x[i])-s[i] for i in range(n)), GRB.MAXIMIZE)
+			#m.setObjective(quicksum(c[i]*x[i] + quicksum(C[i, j]*x[j] for j in range(n))-L0[i]*(1-x[i])-s[i] for i in range(n)), GRB.MAXIMIZE)
+			m.setObjective(quicksum(c[j]*x[j] for j in range(n)) + quicksum(quicksum(C[i,j]*x[i] for i in range(n))-L0[j]*(1-x[j])-s[j] for j in range(n)), GRB.MAXIMIZE)
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
@@ -685,7 +686,3 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 # print(solve_model(m, solve_relax=False))
 # m = standard_linearization(p)[0]
 # print(solve_model(m))
-
-# p = Knapsack(n=200)
-# m = standard_linearization(p)[0]
-# print(solve_model(m, solve_relax=True))
