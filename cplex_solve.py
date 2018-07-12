@@ -735,13 +735,124 @@ def extended_linear_formulation(quad, **kwargs):
 	#return model + setup time
 	return [m, setup_time]
 
-	
+def qsap_elf(qsap, **kwargs):
+	start = timer()
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
+	mdl = Model(name='qsap_elf')
+	x = mdl.binary_var_matrix(m,n,name="binary_var")
+	#TODO this seems to be not working
+	z = mdl.continuous_var_dict(iter([m,n,m,n,m,n]), lb=-mdl.infinity)
+
+	mdl.add_constraints((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+	#add auxiliary constraints
+	for i in range(m-1):
+		for j in range(i+1,m):
+			for k in range(n):
+				for l in range(n):
+					mdl.add_constraint(z[i,k,i,k,j,l] + z[j,l,i,k,j,l] <= 1)
+					mdl.add_constraint(x[i,k] + z[i,k,i,k,j,l] <= 1)
+					mdl.add_constraint(x[j,l] + z[j,l,i,k,j,l] <= 1)
+					mdl.add_constraint(x[i,k] + z[i,k,i,k,j,l] + z[j,l,i,k,j,l] >= 1)
+					mdl.add_constraint(x[j,l] + z[i,k,i,k,j,l] + z[j,l,i,k,j,l] >= 1)
+
+	#compute quadratic values contirbution to obj
+	constant = 0
+	quadratic_values = 0
+	for i in range(m-1):
+		for j in range(i+1,m):
+			for k in range(n):
+				for l in range(n):
+					constant = constant + c[i,k,j,l]
+					quadratic_values = quadratic_values + (c[i,k,j,l]*(z[i,k,i,k,j,l]+z[j,l,i,k,j,l]))
+
+	linear_values = mdl.sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
+	mdl.maximize(linear_values + constant - quadratic_values)
+
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [mdl, setup_time]
+
+def ss_linear_formulation(quad, **kwargs):
+	"""
+	Sherali-Smith Linear Formulation
+	"""
+	start = timer()
+	n = quad.n
+	c = quad.c
+	C = quad.C
+	a = quad.a
+	b = quad.b
+
+	#create model and add variables
+	m = Model(name='ss_linear_formulation')
+	x = m.binary_var_list(n, name="binary_var")
+	s = m.continuous_var_list(n)
+	y = m.continuous_var_list(n)
+
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
+
+	U = np.zeros(n)
+	L = np.zeros(n)
+	u_bound_m = Model(name='upper_bound_model')
+	l_bound_m = Model(name='lower_bound_model')
+	u_bound_x = u_bound_m.continuous_var_list(n, ub=1, lb=0)
+	l_bound_x = l_bound_m.continuous_var_list(n, ub=1, lb=0)
+	if type(quad) is Knapsack:
+		for k in range(quad.m):
+			#add capacity constraints
+			u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+			l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+	if quad.num_items > 0:
+		u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i] for i in range(n)) == quad.num_items)
+		l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i] for i in range(n)) == quad.num_items)
+	for i in range(n):
+		#for each col, solve model to find upper/lower bound
+		u_bound_m.set_objective(sense="max", expr=u_bound_m.sum(C[i,j]*u_bound_x[j] for j in range(n)))
+		l_bound_m.set_objective(sense="min", expr=l_bound_m.sum(C[i,j]*l_bound_x[j] for j in range(n)))
+		u_bound_m.solve()
+		l_bound_m.solve()
+		U[i] = u_bound_m.objective_value
+		L[i] = l_bound_m.objective_value
+
+	#add auxiliary constraints
+	for i in range(n):
+		m.add_constraint(sum(C[i,j]*x[j] for j in range(n))-s[i]-L[i]==y[i])
+		m.add_constraint(y[i] <= (U[i]-L[i])*(1-x[i]))
+		m.add_constraint(s[i] <= (U[i]-L[i])*x[i])
+		m.add_constraint(y[i] >= 0)
+		m.add_constraint(s[i] >= 0)
+
+	#set objective function
+	if type(quad)==HSP:
+		#HSP doesn't habe any linear terms
+		m.maximize(sum(s[i]+x[i]*(L[i])for i in range(n)))
+	else:
+		m.maximize(sum(s[i]+x[i]*(c[i]+L[i])for i in range(n)))
+
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [m, setup_time]
 
 
-# p = Knapsack()
-# p.print_info(print_C =True)
-# m = extended_linear_formulation(p)[0]
-# print(solve_model(m))
+# p = QSAP()
+# m = qsap_elf(p)[0]
+# print(solve_model(m, solve_relax=True))
+
+
+
 
 # p = Knapsack(n=40)
 # m = standard_linearization(p, lhs_constraints=True)

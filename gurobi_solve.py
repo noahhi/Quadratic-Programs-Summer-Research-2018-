@@ -740,7 +740,7 @@ def qsap_elf(qsap, **kwargs):
 	m = qsap.m
 	e = qsap.e
 	c = qsap.c
-	mdl = Model(name='qsap_glovers')
+	mdl = Model(name='qsap_elf')
 	x = mdl.addVars(m,n,name="binary_var", vtype=GRB.BINARY)
 	z = mdl.addVars(m,n,m,n,m,n, lb=-GRB.INFINITY, vtype=GRB.CONTINUOUS)
 
@@ -751,32 +751,95 @@ def qsap_elf(qsap, **kwargs):
 		for j in range(i+1,m):
 			for k in range(n):
 				for l in range(n):
-					z[i,k,i,k,j,l] + z[j,l,i,k,j,l] <= 1
-					x[i,k] + z[i,k,i,k,j,l] <= 1
-					x[j,l] + z[j,l,i,k,j,l] <= 1
-					x[i,k] + z[i,k,i,k,j,l] + z[j,l,i,k,j,l] >= 1
-					x[j,l] + z[i,k,i,k,j,l] + z[j,l,i,k,j,l] >= 1
+					mdl.addConstr(z[i,k,i,k,j,l] + z[j,l,i,k,j,l] <= 1)
+					mdl.addConstr(x[i,k] + z[i,k,i,k,j,l] <= 1)
+					mdl.addConstr(x[j,l] + z[j,l,i,k,j,l] <= 1)
+					mdl.addConstr(x[i,k] + z[i,k,i,k,j,l] + z[j,l,i,k,j,l] >= 1)
+					mdl.addConstr(x[j,l] + z[i,k,i,k,j,l] + z[j,l,i,k,j,l] >= 1)
 
 	#compute quadratic values contirbution to obj
-		constant = 0
-		quadratic_values = 0
-		for i in range(m-1):
-			for j in range(i+1,m):
-				for k in range(n):
-					for l in range(n):
-						constant = constant + c[i,k,j,l]
-						quadratic_values = quadratic_values + (c[i,k,j,l]*(z[i,k,i,k,j,l]+z[j,l,i,k,j,l]))
+	constant = 0
+	quadratic_values = 0
+	for i in range(m-1):
+		for j in range(i+1,m):
+			for k in range(n):
+				for l in range(n):
+					constant = constant + c[i,k,j,l]
+					quadratic_values = quadratic_values + (c[i,k,j,l]*(z[i,k,i,k,j,l]+z[j,l,i,k,j,l]))
 
-		linear_values = quicksum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
-		mdl.setObjective(linear_values + constant - quadratic_values, GRB.MAXIMIZE)
+	linear_values = quicksum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
+	mdl.setObjective(linear_values + constant - quadratic_values, GRB.MAXIMIZE)
 
-		end = timer()
-		setup_time = end-start
-		#return model + setup time
-		return [mdl, setup_time]
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [mdl, setup_time]
 
-# p = QSAP()
-# #p.print_info(print_C =True)
-# m = qsap_elf(p)[0]
-# m.optimize()
-# print(solve_model(m, solve_relax=False))
+def ss_linear_formulation(quad, **kwargs):
+	"""
+	Sherali-Smith Linear Formulation
+	"""
+	start = timer()
+	n = quad.n
+	c = quad.c
+	C = quad.C
+	a = quad.a
+	b = quad.b
+
+	#create model and add variables
+	m = Model(name='ss_linear_formulation')
+	x = m.addVars(n, name="binary_var", vtype=GRB.BINARY)
+	s = m.addVars(n, vtype=GRB.CONTINUOUS)
+	y = m.addVars(n, vtype=GRB.CONTINUOUS)
+
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.addConstr(quicksum(x[i]*a[k][i] for i in range(n)) <= b[k])
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.addConstr(quicksum(x[i] for i in range(n)) == quad.num_items)
+
+	U = np.zeros(n)
+	L = np.zeros(n)
+	u_bound_m = Model(name='upper_bound_model')
+	l_bound_m = Model(name='lower_bound_model')
+	u_bound_x = u_bound_m.addVars(n, ub=1, lb=0, vtype=GRB.CONTINUOUS)
+	l_bound_x = l_bound_m.addVars(n, ub=1, lb=0, vtype=GRB.CONTINUOUS)
+	if type(quad) is Knapsack:
+		for k in range(quad.m):
+			#add capacity constraints
+			u_bound_m.addConstr(quicksum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+			l_bound_m.addConstr(quicksum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+	if quad.num_items > 0:
+		u_bound_m.addConstr(quicksum(u_bound_x[i] for i in range(n)) == quad.num_items)
+		l_bound_m.addConstr(quicksum(l_bound_x[i] for i in range(n)) == quad.num_items)
+	for i in range(n):
+		#for each col, solve model to find upper/lower bound
+		u_bound_m.setObjective(sense=GRB.MAXIMIZE, expr=quicksum(C[i,j]*u_bound_x[j] for j in range(n)))
+		l_bound_m.setObjective(sense=GRB.MINIMIZE, expr=quicksum(C[i,j]*l_bound_x[j] for j in range(n)))
+		u_bound_m.optimize()
+		l_bound_m.optimize()
+		U[i] = u_bound_m.objVal
+		L[i] = l_bound_m.objVal
+
+	#add auxiliary constraints
+	for i in range(n):
+		m.addConstr(sum(C[i,j]*x[j] for j in range(n))-s[i]-L[i]==y[i])
+		m.addConstr(y[i] <= (U[i]-L[i])*(1-x[i]))
+		m.addConstr(s[i] <= (U[i]-L[i])*x[i])
+		m.addConstr(y[i] >= 0)
+		m.addConstr(s[i] >= 0)
+
+	#set objective function
+	if type(quad)==HSP:
+		#HSP doesn't habe any linear terms
+		m.setObjective(sum(s[i]+x[i]*(L[i])for i in range(n)), sense=GRB.MAXIMIZE)
+	else:
+		m.setObjective(sum(s[i]+x[i]*(c[i]+L[i])for i in range(n)), sense=GRB.MAXIMIZE)
+
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [m, setup_time]

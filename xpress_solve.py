@@ -774,9 +774,126 @@ def extended_linear_formulation(quad, **kwargs):
 	#return model + setup time
 	return [m, setup_time]
 
+def qsap_elf(qsap, **kwargs):
+	start = timer()
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
+	mdl = xp.problem(name='qsap_elf')
+	x = np.array([[xp.var(vartype=xp.binary) for i in range(m)]for j in range(n)])
+	z = np.array([[[[[[xp.var(vartype=xp.continuous, lb=-xp.infinity) for i in range(m)]
+		for j in range(n)] for k in range(m)] for l in range(n)] for r in range(m)] for s in range(n)])
+	mdl.addVariable(x, z)
 
+	mdl.addConstraint((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
 
+	#add auxiliary constraints
+	for i in range(m-1):
+		for j in range(i+1,m):
+			for k in range(n):
+				for l in range(n):
+					mdl.addConstraint(z[i,k,i,k,j,l] + z[j,l,i,k,j,l] <= 1)
+					mdl.addConstraint(x[i,k] + z[i,k,i,k,j,l] <= 1)
+					mdl.addConstraint(x[j,l] + z[j,l,i,k,j,l] <= 1)
+					mdl.addConstraint(x[i,k] + z[i,k,i,k,j,l] + z[j,l,i,k,j,l] >= 1)
+					mdl.addConstraint(x[j,l] + z[i,k,i,k,j,l] + z[j,l,i,k,j,l] >= 1)
 
+	#compute quadratic values contirbution to obj
+	constant = 0
+	quadratic_values = 0
+	for i in range(m-1):
+		for j in range(i+1,m):
+			for k in range(n):
+				for l in range(n):
+					constant = constant + c[i,k,j,l]
+					quadratic_values = quadratic_values + (c[i,k,j,l]*(z[i,k,i,k,j,l]+z[j,l,i,k,j,l]))
+
+	linear_values = sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
+	mdl.setObjective(linear_values + constant - quadratic_values, sense=xp.maximize)
+
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [mdl, setup_time]
+
+def ss_linear_formulation(quad, **kwargs):
+	"""
+	Sherali-Smith Linear Formulation
+	"""
+	start = timer()
+	n = quad.n
+	c = quad.c
+	C = quad.C
+	a = quad.a
+	b = quad.b
+
+	#create model and add variables
+	m = xp.problem(name='ss_linear_formulation')
+	x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
+	s = np.array([xp.var(vartype=xp.continuous) for i in range(n)])
+	y = np.array([xp.var(vartype=xp.continuous) for i in range(n)])
+	m.addVariable(x,y,s)
+
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.addConstraint(xp.Sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.addConstraint(xp.Sum(x[i] for i in range(n)) == quad.num_items)
+
+	U = np.zeros(n)
+	L = np.zeros(n)
+	u_bound_m = xp.problem(name='upper_bound_model')
+	l_bound_m = xp.problem(name='lower_bound_model')
+	u_bound_m.setlogfile("xpress.log")
+	l_bound_m.setlogfile("xpress.log")
+	u_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
+	l_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
+	u_bound_m.addVariable(u_bound_x)
+	l_bound_m.addVariable(l_bound_x)
+	if type(quad) is Knapsack:
+		for k in range(quad.m):
+			#add capacity constraints
+			u_bound_m.addConstraint(xp.Sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+			l_bound_m.addConstraint(xp.Sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+	if quad.num_items > 0:
+		u_bound_m.addConstraint(xp.Sum(u_bound_x[i] for i in range(n)) == quad.num_items)
+		l_bound_m.addConstraint(xp.Sum(l_bound_x[i] for i in range(n)) == quad.num_items)
+	for i in range(n):
+		#for each col, solve model to find upper/lower bound
+		u_bound_m.setObjective(xp.Sum(C[i,j]*u_bound_x[j] for j in range(n)), sense=xp.maximize)
+		l_bound_m.setObjective(xp.Sum(C[i,j]*l_bound_x[j] for j in range(n)), sense=xp.minimize)
+		u_bound_m.solve()
+		l_bound_m.solve()
+		U[i] = u_bound_m.getObjVal()
+		L[i] = l_bound_m.getObjVal()
+
+	#add auxiliary constraints
+	for i in range(n):
+		m.addConstraint(sum(C[i,j]*x[j] for j in range(n))-s[i]-L[i]==y[i])
+		m.addConstraint(y[i] <= (U[i]-L[i])*(1-x[i]))
+		m.addConstraint(s[i] <= (U[i]-L[i])*x[i])
+		m.addConstraint(y[i] >= 0)
+		m.addConstraint(s[i] >= 0)
+
+	#set objective function
+	if type(quad)==HSP:
+		#HSP doesn't habe any linear terms
+		m.setObjective(sum(s[i]+x[i]*(L[i])for i in range(n)), sense=xp.maximize)
+	else:
+		m.setObjective(sum(s[i]+x[i]*(c[i]+L[i])for i in range(n)), sense=xp.maximize)
+
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [m, setup_time]
+
+# p = QSAP()
+# m = qsap_elf(p)[0]
+# print(solve_model(m, solve_relax=True))
 
 
 # p = Knapsack()
