@@ -165,14 +165,14 @@ if __name__=="__main__":
 	options = specify alternative/optional constraints specific to each linearization
 	"""
 	start = timer()
-	num_trials = 5
+	num_trials = 10
 	sizes = [60]
-	densities = [25,50,75,100]
+	densities = [50]
 	solvers = ["xpress", "cplex", "gurobi"]
 	types = ["UQP"]
-	bounds = ["-"]
-	cons = ["-"]
-	methods = ["std"]
+	bounds = ["tight","tighter","original"]
+	cons = ["original", "sub1", "sub2"]
+	methods = ["glover"]
 	signs = ["-"]
 	multiples = [1]
 	data = []
@@ -189,9 +189,9 @@ if __name__=="__main__":
 										run_trials(data_=data,trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
 														glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=mult, options=0, reorder=False, mixed_sign=sign)
 										#data.append(dict)
-										print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} , {} )".format(solve_with.upper(),i,j,type,method,"TRUE",sign, mult))
-										run_trials(data_=data,trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
-														glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=mult, options=1, reorder=False, mixed_sign=sign)
+										print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} , {} )".format(solve_with.upper(),i,j,type,method,"FALSE",sign, mult))
+										run_trials(data_=data,trials=num_trials, solver=solve_with, type=type,method=method, symmetric=True,
+														glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=mult, options=0, reorder=False, mixed_sign=sign)
 										#data.append(dict)
 										#repeadetely save to DF so we don't lose any data
 										#df = pd.DataFrame(data)
