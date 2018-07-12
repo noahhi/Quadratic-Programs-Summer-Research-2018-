@@ -682,10 +682,65 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	#return model
 	return [mdl,setup_time]
 
-# p = UQP(n=10)
-# m = standard_linearization(p)[0]
-# print(solve_model(m))
-# m = glovers_linearization(p)[0]
+def extended_linear_formulation(quad, **kwargs):
+	start = timer()
+	n = quad.n
+	c = quad.c
+	C = quad.C
+	a = quad.a
+	b = quad.b
+
+	#create model and add variables
+	m = Model(name='extended_linear_formulation')
+	x = m.binary_var_list(n, name="binary_var")
+	z = m.continuous_var_cube(keys1=n, keys2=n, keys3=n, lb=-m.infinity)
+
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
+
+	#add auxiliary constraints
+	for i in range(n):
+		for j in range(i+1,n):
+			m.add_constraint(z[i,i,j]+z[j,i,j] <= 1)
+			if C[i,j] < 0:
+				m.add_constraint(x[i] + z[i,i,j] <= 1)
+				m.add_constraint(x[j] + z[j,i,j] <= 1)
+			elif C[i,j] > 0:
+				m.add_constraint(x[i] + z[i,i,j] + z[j,i,j] >= 1)
+				m.add_constraint(x[j] + z[i,i,j] + z[j,i,j] >= 1)
+
+	#compute quadratic values contirbution to obj
+	constant = 0
+	quadratic_values = 0
+	for i in range(n):
+		for j in range(i+1,n):
+			constant = constant + C[i,j]
+			quadratic_values = quadratic_values + (C[i,j]*(z[i,i,j]+z[j,i,j]))
+	#set objective function
+	if type(quad)==HSP:
+		#HSP doesn't habe any linear terms
+		m.maximize(constant-quadratic_values)
+	else:
+		linear_values = m.sum(x[i]*c[i] for i in range(n))
+		m.maximize(linear_values + constant - quadratic_values)
+
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [m, setup_time]
+
+	
+
+
+# p = Knapsack()
+# p.print_info(print_C =True)
+# m = extended_linear_formulation(p)[0]
 # print(solve_model(m))
 
 # p = Knapsack(n=40)
@@ -701,6 +756,6 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 # m = glovers_linearization(p)[0]
 # print(solve_model(m))
 
-p = QSAP()
-m = qsap_glovers(p, bounds="tight", constraints="sub2", lhs_constraints=True)[0]
-print(solve_model(m))
+# p = QSAP()
+# m = qsap_glovers(p, bounds="tight", constraints="sub2", lhs_constraints=True)[0]
+# print(solve_model(m))

@@ -166,7 +166,7 @@ if __name__=="__main__":
 	"""
 	start = timer()
 	num_trials = 5
-	sizes = [75]
+	sizes = [60]
 	densities = [25,50,75,100]
 	solvers = ["xpress", "cplex", "gurobi"]
 	types = ["UQP"]

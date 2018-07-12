@@ -314,9 +314,11 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 
 		# create model and add variables
 		m = xp.problem(name='RLT-1_linearization')
-		x = m.addVars(n, name='binary_var', lb=0, ub=1, vtype=GRB.CONTINUOUS) # named binary_var so can easily switch for debug
-		w = m.addVars(n, n, vtype=GRB.CONTINUOUS)
-		y = m.addVars(n, n, vtype=GRB.CONTINUOUS)
+		m.setlogfile("xpress.log")
+		x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
+		w = np.array([[xp.var(vartype=xp.continuous) for i in range(n)] for i in range(n)])
+		y = np.array([[xp.var(vartype=xp.continuous) for i in range(n)] for i in range(n)])
+		m.addVariable(x,w,y)
 
 		if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
 			# add capacity constraint(s)
@@ -331,7 +333,8 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 		for i in range(n):
 			for j in range(i+1, n):
 				# con 16
-				m.addConstraint(w[i, j] == w[j, i], name='con16'+str(i)+str(j))
+				#m.addConstraint(w[i, j] == w[j, i], name='con16'+str(i)+str(j))
+				m.addConstraint(w[i, j] == w[j, i])
 
 		for k in range(quad.m):
 			for j in range(n):
@@ -349,7 +352,8 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 				# con 15 (y>=0 implied)
 				m.addConstraint(y[i, j] <= 1-x[j])
 				# con 17
-				m.addConstraint(y[i, j] == x[i]-w[i, j], name='con17'+str(i)+str(j))
+				#m.addConstraint(y[i, j] == x[i]-w[i, j], name='con17'+str(i)+str(j))
+				m.addConstraint(y[i, j] == x[i]-w[i, j])
 
 		quadratic_values = 0
 		for j in range(n):
@@ -360,8 +364,9 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 		if type(quad) is HSP:
 			m.setObjective(quadratic_values, sense=xp.maximize)
 		else:
-			m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
 			linear_values = xp.Sum(x[j]*c[j] for j in range(n))
+			m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
+
 
 		# return model
 		return m
@@ -376,6 +381,8 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	# model with continuous relaxed rlt1 and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
 	m.solve()
+	d = m.getDual()
+	print(d)
 	#print(m.getObjVal())     #this should be continuous relax solution to glover_ext.
 	# retrieve dual variables
 	duals16 = np.zeros((n, n))
@@ -712,3 +719,67 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 
 	#return model
 	return [mdl,setup_time]
+
+def extended_linear_formulation(quad, **kwargs):
+	start = timer()
+	n = quad.n
+	c = quad.c
+	C = quad.C
+	a = quad.a
+	b = quad.b
+
+	#create model and add variables
+	m = xp.problem(name='extended_linear_formulation')
+	x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
+	z = np.array([[[xp.var(vartype=xp.continuous, lb=-xp.infinity) for i in range(n)] for j in range(n)] for k in range(n)])
+	m.addVariable(x,z)
+
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.addConstraint(xp.Sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.addConstraint(xp.Sum(x[i] for i in range(n)) == quad.num_items)
+
+	#add auxiliary constraints
+	for i in range(n):
+		for j in range(i+1,n):
+			m.addConstraint(z[i,i,j]+z[j,i,j] <= 1)
+			if C[i,j] < 0:
+				m.addConstraint(x[i] + z[i,i,j] <= 1)
+				m.addConstraint(x[j] + z[j,i,j] <= 1)
+			elif C[i,j] > 0:
+				m.addConstraint(x[i] + z[i,i,j] + z[j,i,j] >= 1)
+				m.addConstraint(x[j] + z[i,i,j] + z[j,i,j] >= 1)
+
+	#compute quadratic values contirbution to obj
+	constant = 0
+	quadratic_values = 0
+	for i in range(n):
+		for j in range(i+1,n):
+			constant = constant + C[i,j]
+			quadratic_values = quadratic_values + (C[i,j]*(z[i,i,j]+z[j,i,j]))
+	#set objective function
+	if type(quad)==HSP:
+		#HSP doesn't habe any linear terms
+		m.setObjective(constant-quadratic_values, sense=xp.maximize)
+	else:
+		linear_values = xp.Sum(x[i]*c[i] for i in range(n))
+		m.setObjective(linear_values + constant - quadratic_values, sense=xp.maximize)
+
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [m, setup_time]
+
+
+
+
+
+
+# p = Knapsack()
+# p.print_info(print_C =True)
+# m = extended_linear_formulation(p)[0]
+# print(solve_model(m))

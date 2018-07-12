@@ -69,8 +69,8 @@ def performance_profile(df, save_loc, variable, formulations):
         xf = r[:,f]
         plt.plot(xf,yf, drawstyle="steps", linestyle=linestyles[f])
     plt.title("Performance Profile For {}".format(variable))
-    plt.xlabel('Performance Profile on [0,10]')
-    plt.ylabel('P(r <= t: 1 <= s <= n)')
+    plt.xlabel('Factor of Best Ratio')
+    plt.ylabel('Probability')
     plt.legend([form for form in formulations])
 
     plt.savefig(save_loc+"performance_profile")
@@ -85,14 +85,26 @@ def analyze(df_name, new_folder_name, test_variable, formulations):
         if not new_folder_name=="test":
             os.makedirs(mypath)
         df.to_pickle(mypath+'/dataframe.pkl')
+        #df = df[:-5]   --use this to cut off rows from end if uneven length 
         write_report(df, save_loc=mypath)
         performance_profile(df, save_loc=mypath, variable=test_variable, formulations=formulations)
     else:
         raise Exception("Save path folder {} already exists. ".format(mypath))
 
 
-analyze(df_name='uqp_std_cons', new_folder_name='uqp_std_cons', test_variable="solver", formulations=['cplex', 'xpress', 'gurobi'])
+"""
+variable options: 'solver', 'method', 'glover_bounds', 'options' (ie. any column headers from report)
+corresponding formulation options:
+    solver : ['cplex', 'gurobi', 'xpress']
+    method : ['glover', 'std']
+    glover_bounds : ['original', 'tight', 'tighter']
+"""
+
+analyze(df_name='kqkp_90', new_folder_name='kqkp90_mixed_sign', test_variable="mixed_sign", formulations=[True, False])
 #analyze(df_name='uqp_std_cons', new_folder_name='uqp_std_cons', test_variable="options", formulations=[0, 1])
+#analyze(df_name='gloverbounds', new_folder_name='glover_bounds', test_variable="glover_bounds", formulations=['original', 'tight', 'tighter'])
+
+
 
 #pre converted DF
 # #get number of rows and number of problems
@@ -128,9 +140,6 @@ analyze(df_name='uqp_std_cons', new_folder_name='uqp_std_cons', test_variable="s
 # r4 = np.sort(r4)
 # r2 = np.sort(r2)
 
-
-
-
 # org_bounds = df[df["glover_bounds"]=="original"]
 # tight_bounds = df[df["glover_bounds"]=="tight"]
 #
@@ -148,7 +157,6 @@ analyze(df_name='uqp_std_cons', new_folder_name='uqp_std_cons', test_variable="s
 # plt.plot(sorted_org.values)
 # plt.plot(sorted_tight.values)
 # plt.show()
-
 
 # data=pd.read_excel(open("C:/Users/huntisan/Desktop/summer2018/std_glove_data.xlsx", "rb"))
 # relevant_data = data.loc[:,["method", "size", "avg_solve_time"]]
