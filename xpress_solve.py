@@ -781,12 +781,13 @@ def qsap_elf(qsap, **kwargs):
 	e = qsap.e
 	c = qsap.c
 	mdl = xp.problem(name='qsap_elf')
-	x = np.array([[xp.var(vartype=xp.binary) for i in range(m)]for j in range(n)])
-	z = np.array([[[[[[xp.var(vartype=xp.continuous, lb=-xp.infinity) for i in range(m)]
-		for j in range(n)] for k in range(m)] for l in range(n)] for r in range(m)] for s in range(n)])
+	x = np.array([[xp.var(vartype=xp.binary) for i in range(n)]for j in range(m)])
+	z = np.array([[[[[[xp.var(vartype=xp.continuous, lb=-xp.infinity) for i in range(n)]
+		for j in range(m)] for k in range(n)] for l in range(m)] for r in range(n)] for s in range(m)])
 	mdl.addVariable(x, z)
 
-	mdl.addConstraint((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+	cons = [xp.constraint(sum(x[i,k] for k in range(n)) == 1) for i in range(m)]
+	mdl.addConstraint(cons)
 
 	#add auxiliary constraints
 	for i in range(m-1):
@@ -891,9 +892,6 @@ def ss_linear_formulation(quad, **kwargs):
 	#return model + setup time
 	return [m, setup_time]
 
-# p = QSAP()
-# m = qsap_elf(p)[0]
-# print(solve_model(m, solve_relax=True))
 
 
 # p = Knapsack()

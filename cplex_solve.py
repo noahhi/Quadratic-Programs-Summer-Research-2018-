@@ -743,9 +743,8 @@ def qsap_elf(qsap, **kwargs):
 	c = qsap.c
 	mdl = Model(name='qsap_elf')
 	x = mdl.binary_var_matrix(m,n,name="binary_var")
-	#TODO this seems to be not working
-	z = mdl.continuous_var_dict(iter([m,n,m,n,m,n]), lb=-mdl.infinity)
-
+	z = np.array([[[[[[mdl.continuous_var() for i in range(n)]for j in range(m)]
+						for k in range(n)]for l in range(m)] for s in range(n)] for t in range(m)])
 	mdl.add_constraints((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
 
 	#add auxiliary constraints
@@ -845,12 +844,6 @@ def ss_linear_formulation(quad, **kwargs):
 	setup_time = end-start
 	#return model + setup time
 	return [m, setup_time]
-
-
-# p = QSAP()
-# m = qsap_elf(p)[0]
-# print(solve_model(m, solve_relax=True))
-
 
 
 
