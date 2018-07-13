@@ -172,8 +172,8 @@ if __name__=="__main__":
 	options = specify alternative/optional constraints specific to each linearization
 	"""
 	start = timer()
-	num_trials = 10
-	sizes = [110]
+	num_trials = 5
+	sizes = [130]
 	densities = [50]
 	solvers = ["cplex", "xpress", "gurobi"]
 	types = ["KQKP"]
