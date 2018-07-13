@@ -151,6 +151,11 @@ class UQP(Quadratic): #unconstrained 0-1 quadratic program
 			self.c[i] = -(q.item(i) + Q.item((i,i)))
 			for j in range(i+1,n):
 				self.C[i,j] = -(2*Q[i,j])
+				#TODO symmetric for glovers only
+				if symmetric:
+					self.C[i,j] = 0.5*self.C[i,j]
+					self.C[j,i] = self.C[i,j]
+
 		#print(self.c)
 		#print(self.C)
 
@@ -167,8 +172,9 @@ class HSP(Quadratic): #heaviest k-subgraph problem
 			for j in range(i+1,n):
 				if(np.random.randint(1,101) <= density):
 					self.C[i,j] = 1
-					if(symmetric):
-						self.C[j,i] = 1
+					if symmetric:
+						self.C[i,j] = 0.5
+						self.C[j,i] = 0.5
 
 class QSAP: #quadratic semi assignment problem
 	def __init__(self, seed=0, n=3, m=10):

@@ -8,7 +8,6 @@ import xpress as xp
 #xp.addcbmsghandler(None,"xpress.log",0)
 
 def standard_linearization(quad, lhs_constraints=True, **kwargs):
-	start = timer()
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -59,13 +58,10 @@ def standard_linearization(quad, lhs_constraints=True, **kwargs):
 		linear_values = sum(x[i]*c[i] for i in range(n))
 		m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
 
-	end = timer()
-	setup_time = end-start
 	# return model + setup time
-	return [m, setup_time]
+	return [m, 0]
 
 def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False, **kwargs):
-	start = timer()
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -99,6 +95,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	L0 = np.zeros(n)
 	U0 = np.zeros(n)
 	L1 = np.zeros(n)
+	start = timer()
 	if(bounds == "original"):
 		for j in range(n):
 			col = C[:, j]
@@ -142,22 +139,24 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 			l_bound_m.addConstraint(l_con)
 			u_bound_m.solve()
 			if "optimal" not in str(u_bound_m.getProbStatusString()):
-				print("non-optimal solve status: " + str(u_bound_m.getProbStatusString()) + " when solving for upper bound (U1)")
+				#print("non-optimal solve status: " + str(u_bound_m.getProbStatusString()) + " when solving for upper bound (U1)")
 				u_bound_m.delConstraint(u_con)
 				u_bound_m.addConstraint(u_bound_x[j]==0)
 				m.addConstraint(x[j]==0)
 				u_bound_m.solve()
+			else:
+				u_bound_m.delConstraint(u_con)
 			l_bound_m.solve()
 			if "optimal" not in str(l_bound_m.getProbStatusString()):
-				print("non-optimal solve status: " + str(l_bound_m.getProbStatusString()) + " when solving for lower bound (L0)")
+				#print("non-optimal solve status: " + str(l_bound_m.getProbStatusString()) + " when solving for lower bound (L0)")
 				l_bound_m.delConstraint(l_con)
 				l_bound_m.addConstraint(l_bound_x[j]==1)
 				m.addConstraint(x[j]==1)
 				l_bound_m.solve()
+			else:
+				l_bound_m.delConstraint(l_con)
 			U1[j] = u_bound_m.getObjVal()
 			L0[j] = l_bound_m.getObjVal()
-			u_bound_m.delConstraint(u_con)
-			l_bound_m.delConstraint(l_con)
 			if lhs_constraints:
 				u_con = u_bound_x[j] == 0
 				u_bound_m.addConstraint(u_con)
@@ -165,24 +164,28 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 				l_bound_m.addConstraint(l_con)
 				u_bound_m.solve()
 				if "optimal" not in str(u_bound_m.getProbStatusString()):
-					print("non-optimal solve status: " + str(u_bound_m.status) + " when solving for upper bound (U0)")
+					#print("non-optimal solve status: " + str(u_bound_m.status) + " when solving for upper bound (U0)")
 					u_bound_m.delConstraint(u_con)
 					u_bound_m.addConstraint(u_bound_x[j]==1)
 					m.addConstraint(x[j]==1)
 					u_bound_m.solve()
+				else:
+					u_bound_m.delConstraint(u_con)
 				l_bound_m.solve()
 				if "optimal" not in str(l_bound_m.getProbStatusString()):
-					print("non-optimal solve status: " + str(l_bound_m.status) + " when solving for lower bound (L1)")
+					#print("non-optimal solve status: " + str(l_bound_m.status) + " when solving for lower bound (L1)")
 					l_bound_m.delConstraint(l_con)
 					l_bound_m.addConstraint(l_bound_x[j]==0)
 					m.addConstraint(x[j]==0)
 					l_bound_m.solve()
+				else:
+					l_bound_m.delConstraint(l_con)
 				U0[j] = u_bound_m.getObjVal()
 				L1[j] = l_bound_m.getObjVal()
-				u_bound_m.delConstraint(u_con)
-				l_bound_m.delConstraint(l_con)
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
+	end = timer()
+	setup_time = end-start
 
 	# add auxiliary constrains
 	if(constraints == "original"):
@@ -220,8 +223,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
-	end = timer()
-	setup_time = end-start
+
 	# return model
 	return [m, setup_time]
 

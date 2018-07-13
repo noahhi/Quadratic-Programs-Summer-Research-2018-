@@ -8,7 +8,6 @@ setParam('OutputFlag',0)
 setParam('LogFile',"")
 
 def standard_linearization(quad, lhs_constraints=True, **kwargs):
-	start = timer()
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -58,13 +57,10 @@ def standard_linearization(quad, lhs_constraints=True, **kwargs):
 		linear_values = sum(x[i]*c[i] for i in range(n))
 		m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
 
-	end = timer()
-	setup_time = end-start
 	# return model + setup time
-	return [m, setup_time]
+	return [m, 0]
 
 def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False, **kwargs):
-	start = timer()
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -98,6 +94,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	L0 = np.zeros(n)
 	U0 = np.zeros(n)
 	L1 = np.zeros(n)
+	start = timer()
 	if(bounds == "original"):
 		for j in range(n):
 			col = C[:, j]
@@ -137,45 +134,51 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 			#if GRB.OPTIMAL!=2: #2 means optimal, 3 infeasible. see gurobi docs for status_codes
 			#	print(GRB.OPTIMAL)
 			if u_bound_m.status != GRB.Status.OPTIMAL:
-				print("non-optimal solve status: " + str(u_bound_m.status) + " when solving for upper bound (U1)")
+				#print("non-optimal solve status: " + str(u_bound_m.status) + " when solving for upper bound (U1)")
 				u_bound_m.remove(u_con)
 				u_bound_m.addConstr(u_bound_x[j]==0)
 				m.addConstr(x[j]==0)
 				u_bound_m.optimize()
+			else:
+				u_bound_m.remove(u_con)
 			l_bound_m.optimize()
 			if l_bound_m.status != GRB.Status.OPTIMAL:
-				print("non-optimal solve status: " + str(l_bound_m.status) + " when solving for lower bound (L0)")
+				#print("non-optimal solve status: " + str(l_bound_m.status) + " when solving for lower bound (L0)")
 				l_bound_m.remove(l_con)
 				l_bound_m.addConstr(l_bound_x[j]==1)
 				m.addConstr(x[j]==1)
 				l_bound_m.optimize()
+			else:
+				l_bound_m.remove(l_con)
 			U1[j] = u_bound_m.objVal
 			L0[j] = l_bound_m.objVal
-			u_bound_m.remove(u_con)
-			l_bound_m.remove(l_con)
 			if lhs_constraints:
 				u_con = u_bound_m.addConstr(u_bound_x[j] == 0)
 				l_con = l_bound_m.addConstr(l_bound_x[j] == 1)
 				u_bound_m.optimize()
 				if u_bound_m.status != GRB.Status.OPTIMAL:
-					print("non-optimal solve status: " + str(u_bound_m.status) + " when solving for upper bound (U0)")
+					#print("non-optimal solve status: " + str(u_bound_m.status) + " when solving for upper bound (U0)")
 					u_bound_m.remove(u_con)
 					u_bound_m.addConstr(u_bound_x[j]==1)
 					m.addConstr(x[j]==1)
 					u_bound_m.optimize()
+				else:
+					u_bound_m.remove(u_con)
 				l_bound_m.optimize()
 				if l_bound_m.status != GRB.Status.OPTIMAL:
-					print("non-optimal solve status: " + str(l_bound_m.status) + " when solving for lower bound (L1)")
+					#print("non-optimal solve status: " + str(l_bound_m.status) + " when solving for lower bound (L1)")
 					l_bound_m.remove(l_con)
 					l_bound_m.addConstr(l_bound_x[j]==0)
 					m.addConstr(x[j]==0)
 					l_bound_m.optimize()
+				else:
+					l_bound_m.remove(l_con)
 				U0[j] = u_bound_m.objVal
 				L1[j] = l_bound_m.objVal
-				u_bound_m.remove(u_con)
-				l_bound_m.remove(l_con)
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
+	end = timer()
+	setup_time = end-start
 
 	# add auxiliary constrains
 	if(constraints == "original"):
@@ -212,8 +215,6 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
-	end = timer()
-	setup_time = end-start
 	# return model
 	return [m, setup_time]
 

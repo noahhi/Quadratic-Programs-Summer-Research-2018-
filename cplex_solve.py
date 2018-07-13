@@ -4,7 +4,6 @@ from timeit import default_timer as timer
 from docplex.mp.model import Model
 
 def standard_linearization(quad, lhs_constraints=True, **kwargs):
-	start = timer()
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -54,13 +53,10 @@ def standard_linearization(quad, lhs_constraints=True, **kwargs):
 		linear_values = m.sum(x[i]*c[i] for i in range(n))
 		m.maximize(linear_values + quadratic_values)
 
-	end = timer()
-	setup_time = end-start
-	#return model + setup time
-	return [m, setup_time]
+	#return model. no setup time for std
+	return [m, 0]
 
 def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False):
-	start = timer()
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -92,6 +88,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	L0 = np.zeros(n)
 	U0 = np.zeros(n)
 	L1 = np.zeros(n)
+	start = timer()
 	if(bounds=="original"):
 		for j in range(n):
 			col = C[:, j]
@@ -131,46 +128,52 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 			l_con = l_bound_m.add_constraint(l_bound_x[j]==0)
 			u_bound_m.solve()
 			if "OPTIMAL_SOLUTION" not in str(u_bound_m.get_solve_status()):
-				print(str(u_bound_m.get_solve_status()) + " when solving for upper bound (U1)")
+				#print(str(u_bound_m.get_solve_status()) + " when solving for upper bound (U1)")
 				u_bound_m.remove_constraint(u_con)
 				u_bound_m.add_constraint(u_bound_x[j]==0)
 				m.add_constraint(x[j]==0)
 				u_bound_m.solve()
+			else:
+				u_bound_m.remove_constraint(u_con)
 			l_bound_m.solve()
 			if "OPTIMAL_SOLUTION" not in str(l_bound_m.get_solve_status()):
-				print(str(l_bound_m.get_solve_status()) + " when solving for lower bound (L0)")
+				#print(str(l_bound_m.get_solve_status()) + " when solving for lower bound (L0)")
 				l_bound_m.remove_constraint(l_con)
 				l_bound_m.add_constraint(l_bound_x[j]==1)
 				m.add_constraint(x[j]==1)
 				l_bound_m.solve()
+			else:
+				l_bound_m.remove_constraint(l_con)
 			U1[j] = u_bound_m.objective_value
 			L0[j] = l_bound_m.objective_value
-			u_bound_m.remove_constraint(u_con)
-			l_bound_m.remove_constraint(l_con)
 			if lhs_constraints:
 				u_con = u_bound_m.add_constraint(u_bound_x[j] == 0)
 				l_con = l_bound_m.add_constraint(l_bound_x[j] == 1)
 				u_bound_m.solve()
 				if "OPTIMAL_SOLUTION" not in str(u_bound_m.get_solve_status()):
 					#TODO double check optimal sol result w/ std lin
-					print(str(u_bound_m.get_solve_status()) + " when solving for upper bound (U0)")
+					#print(str(u_bound_m.get_solve_status()) + " when solving for upper bound (U0)")
 					u_bound_m.remove_constraint(u_con)
 					u_bound_m.add_constraint(u_bound_x[j]==1)
 					m.add_constraint(x[j]==1)
 					u_bound_m.solve()
+				else:
+					u_bound_m.remove_constraint(u_con)
 				l_bound_m.solve()
 				if "OPTIMAL_SOLUTION" not in str(l_bound_m.get_solve_status()):
-					print(str(l_bound_m.get_solve_status()) + " when solving for lower bound (L1)")
+					#print(str(l_bound_m.get_solve_status()) + " when solving for lower bound (L1)")
 					l_bound_m.remove_constraint(l_con)
 					l_bound_m.add_constraint(l_bound_x[j]==0)
 					m.add_constraint(x[j]==0)
 					l_bound_m.solve()
+				else:
+					l_bound_m.remove_constraint(l_con)
 				U0[j] = u_bound_m.objective_value
 				L1[j] = l_bound_m.objective_value
-				u_bound_m.remove_constraint(u_con)
-				l_bound_m.remove_constraint(l_con)
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
+	end = timer()
+	setup_time = end-start
 
 	#add auxiliary constrains
 	if(constraints=="original"):
@@ -205,8 +208,6 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
-	end = timer()
-	setup_time = end-start
 	#return model
 	return [m,setup_time]
 
@@ -542,7 +543,6 @@ def solve_model(model, solve_relax=True):
 	return results
 
 def no_linearization(quad, **kwargs):
-	start = timer()
 	n = quad.n
 	c = quad.c
 	m = Model(name='no_linearization')
@@ -569,9 +569,7 @@ def no_linearization(quad, **kwargs):
 		linear_values = m.sum(x[i]*c[i] for i in range(n))
 		m.maximize(linear_values + quadratic_values)
 
-	end = timer()
-	setup_time = end-start
-	return [m, setup_time]
+	return [m, 0]
 
 def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, **kwargs):
 	start = timer()
@@ -683,7 +681,6 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	return [mdl,setup_time]
 
 def extended_linear_formulation(quad, **kwargs):
-	start = timer()
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -730,13 +727,10 @@ def extended_linear_formulation(quad, **kwargs):
 		linear_values = m.sum(x[i]*c[i] for i in range(n))
 		m.maximize(linear_values + constant - quadratic_values)
 
-	end = timer()
-	setup_time = end-start
-	#return model + setup time
-	return [m, setup_time]
+	#return model + setup time=0
+	return [m, 0]
 
 def qsap_elf(qsap, **kwargs):
-	start = timer()
 	n = qsap.n
 	m = qsap.m
 	e = qsap.e
@@ -771,16 +765,13 @@ def qsap_elf(qsap, **kwargs):
 	linear_values = mdl.sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
 	mdl.maximize(linear_values + constant - quadratic_values)
 
-	end = timer()
-	setup_time = end-start
-	#return model + setup time
-	return [mdl, setup_time]
+	#return model + setup time=0
+	return [mdl, 0]
 
 def ss_linear_formulation(quad, **kwargs):
 	"""
 	Sherali-Smith Linear Formulation
 	"""
-	start = timer()
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -802,6 +793,7 @@ def ss_linear_formulation(quad, **kwargs):
 	if quad.num_items > 0:
 		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
 
+	start = timer()
 	U = np.zeros(n)
 	L = np.zeros(n)
 	u_bound_m = Model(name='upper_bound_model')
@@ -845,21 +837,54 @@ def ss_linear_formulation(quad, **kwargs):
 	#return model + setup time
 	return [m, setup_time]
 
+def qsap_standard(qsap, **kwargs):
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
 
+	#create model and add variables
+	m = Model(name='standard_linearization')
+	x = mdl.binary_var_matrix(keys1=m,keys2=n,name="binary_var")
+	w = m.continuous_var_matrix(keys1=n, keys2=n, lb=-m.infinity)
 
-# p = Knapsack(n=40)
-# m = standard_linearization(p, lhs_constraints=True)
-# print(solve_model(m[0]))
-# m = standard_linearization(p, lhs_constraints=False)
-# print(solve_model(m[0]))
-# m = no_linearization(p)[0]
-# #m.parameters.optimalitytarget = 3
-# print(solve_model(m, solve_relax=False))
-# m = standard_linearization(p)[0]
-# print(solve_model(m))
-# m = glovers_linearization(p)[0]
-# print(solve_model(m))
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
-# p = QSAP()
-# m = qsap_glovers(p, bounds="tight", constraints="sub2", lhs_constraints=True)[0]
-# print(solve_model(m))
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
+
+	#add auxiliary constraints
+	for i in range(n):
+		for j in range(i+1,n):
+			if lhs_constraints:
+				if C[i,j] > 0:
+					m.add_constraint(w[i,j] <= x[i])
+					m.add_constraint(w[i,j] <= x[j])
+				else:
+					m.add_constraint(x[i]+x[j]-1 <= w[i,j])
+					m.add_constraint(w[i,j] >= 0)
+			else:
+				m.add_constraint(w[i,j] <= x[i])
+				m.add_constraint(w[i,j] <= x[j])
+				m.add_constraint(x[i]+x[j]-1 <= w[i,j])
+				m.add_constraint(w[i,j] >= 0)
+
+	#compute quadratic values contirbution to obj
+	quadratic_values = 0
+	for i in range(n):
+		for j in range(i+1,n):
+			quadratic_values = quadratic_values + (w[i,j]*(C[i,j]+C[j,i]))
+	#set objective function
+	if type(quad)==HSP:
+		#HSP doesn't habe any linear terms
+		m.maximize(quadratic_values)
+	else:
+		linear_values = m.sum(x[i]*c[i] for i in range(n))
+		m.maximize(linear_values + quadratic_values)
+
+	#return model. no setup time for std
+	return [m, 0]

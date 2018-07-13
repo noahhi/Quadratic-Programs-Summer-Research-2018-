@@ -85,9 +85,9 @@ def analyze(df_name, new_folder_name, test_variable, formulations):
         if not new_folder_name=="test":
             os.makedirs(mypath)
         df.to_pickle(mypath+'/dataframe.pkl')
-        #df = df[:-5]   --use this to cut off rows from end if uneven length 
+        #df = df[:-5]   --use this to cut off (5) rows from end if uneven length
         write_report(df, save_loc=mypath)
-        performance_profile(df, save_loc=mypath, variable=test_variable, formulations=formulations)
+        #performance_profile(df, save_loc=mypath, variable=test_variable, formulations=formulations)
     else:
         raise Exception("Save path folder {} already exists. ".format(mypath))
 
@@ -98,12 +98,12 @@ corresponding formulation options:
     solver : ['cplex', 'gurobi', 'xpress']
     method : ['glover', 'std']
     glover_bounds : ['original', 'tight', 'tighter']
+    glover_cons : ['original', 'sub1', 'sub2']
 """
 
-analyze(df_name='kqkp_90', new_folder_name='kqkp90_mixed_sign', test_variable="mixed_sign", formulations=[True, False])
+analyze(df_name='test', new_folder_name='test', test_variable="trial", formulations=[0,1,2,3,4,5,6,7,8,9])
 #analyze(df_name='uqp_std_cons', new_folder_name='uqp_std_cons', test_variable="options", formulations=[0, 1])
 #analyze(df_name='gloverbounds', new_folder_name='glover_bounds', test_variable="glover_bounds", formulations=['original', 'tight', 'tighter'])
-
 
 
 #pre converted DF

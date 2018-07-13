@@ -6,6 +6,7 @@ import sys
 import time
 import pandas as pd
 from timeit import default_timer as timer
+import time
 
 
 def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
@@ -35,6 +36,9 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 		f.write(seperator+"\n\n")
 
 		for i in range(trials):
+			time_stamp = time.strftime("%H_%M")
+			#print("starting trial number {:2} at {}".format(i,time_stamp))
+			print("starting at {}".format(time_stamp))
 			f.write("Iteration "+str(i+1)+"\n")
 
 			#generate problem instance
@@ -95,7 +99,10 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 				results = cur_solver.solve_model(m[0])
 
 			#retrieve info from solving instance
-			instance_setup_time = m[1]
+			if method=='glover' and (glover_bounds=="tight" or glover_bounds=="tighter"):
+				instance_setup_time = m[1]
+			else:
+				instance_setup_time = 0
 			instance_solve_time = results.get("solve_time")
 			instance_obj_val = results.get("objective_value")
 			instance_int_gap = results.get("integrality_gap")
@@ -166,46 +173,33 @@ if __name__=="__main__":
 	"""
 	start = timer()
 	num_trials = 10
-	sizes = [60]
+	sizes = [110]
 	densities = [50]
-	solvers = ["xpress", "cplex", "gurobi"]
-	types = ["UQP"]
+	solvers = ["cplex", "xpress", "gurobi"]
+	types = ["KQKP"]
+	methods = ["glover"]
 	bounds = ["tight","tighter","original"]
 	cons = ["original", "sub1", "sub2"]
-	methods = ["glover"]
-	signs = ["-"]
+	signs = [False, True]
 	multiples = [1]
+	symmetric = [False]
 	data = []
-	for j in densities:
+	for sign in signs:
 		for solve_with in solvers:
 			for i in sizes:
 				for type in types:
 					for bound in bounds:
 						for con in cons:
 							for method in methods:
-								for sign in signs:
+								for j in densities:
 									for mult in multiples:
-										print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} , {} )".format(solve_with.upper(),i,j,type,method,"FALSE",sign, mult))
-										run_trials(data_=data,trials=num_trials, solver=solve_with, type=type,method=method, symmetric=False,
-														glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=mult, options=0, reorder=False, mixed_sign=sign)
-										#data.append(dict)
-										print("running-( {} , {} , {} , {} , {} , all4cons-{} , mixed_sign-{} , {} )".format(solve_with.upper(),i,j,type,method,"FALSE",sign, mult))
-										run_trials(data_=data,trials=num_trials, solver=solve_with, type=type,method=method, symmetric=True,
-														glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=mult, options=0, reorder=False, mixed_sign=sign)
-										#data.append(dict)
-										#repeadetely save to DF so we don't lose any data
-										#df = pd.DataFrame(data)
-										#df = df[["solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
-										# "density", "multiple", "avg_gap","avg_setup_time", "avg_solve_time", "avg_total_time", "std_dev", "avg_obj_val"]]  #reorder columns
-										#df.to_pickle('dataframes/testing.pkl')
+										for sym in symmetric:
+											print("running-(solver-{}, size-{}, density-{}, type-{}, method-{}, bound-{}, cons-{}, mixed_sign-{}, multiple-{}, symmetric-{})".format(
+												solve_with.upper(),i,j,type,method,bound,con,sign,mult,sym))
+											run_trials(data_=data,trials=num_trials, solver=solve_with, type=type,method=method, symmetric=sym,
+												glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=mult, options=0, reorder=False, mixed_sign=sign)
 
-	#save to excel file (name = timestamp)
-	# time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
-	# excel_filename = "reports/"+time_stamp+'-report.xlsx'
-	# writer = pd.ExcelWriter(excel_filename, engine='xlsxwriter')
-	# df.to_excel(writer, index=False)
-	# writer.save()
-	# print(df)
+
 	end = timer()
 	print("took {:.3} seconds to run all trials".format(end-start))
 
