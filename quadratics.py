@@ -41,7 +41,7 @@ class Quadratic: #base class for all quadratic problem types
 			print('quadratic objective coeff vector C = \n' + str(self.C))
 		print("")
 
-	def reorder(self): #
+	def reorder(self): #note this only works for nonnegative coefficients (ie. wont work for UQP atm)
 		C = self.C
 		n = self.n
 		value_matrix = np.absolute(np.copy(self.C))
@@ -65,8 +65,9 @@ class Quadratic: #base class for all quadratic problem types
 				C[i,j] =  value_matrix[new_order[i],new_order[j]]
 		#TODO possible this could cause issues(make sure c is reordered correctly)
 		self.c = [self.c[i] for i in new_order]
-		for j in range(self.m):
-			self.a[j] = [self.a[j][i] for i in new_order]
+		if type(self) == Knapsack:
+			for j in range(self.m):
+				self.a[j] = [self.a[j][i] for i in new_order]
 
 class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 	def __init__(self, seed=0, n=10, m=1, density=100, symmetric=False, k_item=False, mixed_sign=False):
@@ -197,3 +198,62 @@ class QSAP: #quadratic semi assignment problem
 				for j in range(i+1,m):
 					for l in range(n):
 						self.c[i,k,j,l] = np.random.randint(-50,51)
+	def reorder(self):
+		C = self.c
+		n = self.n
+		m = self.m
+		value_matrix = np.zeros(shape=(m,n,m,n))
+		for i in range(m-1):
+			for k in range(n):
+				for j in range(i+1,m):
+					for l in range(n):
+						value_matrix[i,k,j,l] = abs(C[i,k,j,l])
+						value_matrix[j,l,i,k] = abs(C[i,k,j,l])
+		print(value_matrix)
+		col_sums = np.zeros((m,n))
+		new_order = []
+		for i in range(m):
+			for k in range(n):
+				col_sums[i,k] = sum(sum(value_matrix[i,k,j,l] for j in range(m))for l in range(n))
+		print(col_sums)
+		for i in range(n*m):
+			minv = col_sums[0,0]
+			mindex = (0,0)
+			for (x,y), v in np.ndenumerate(col_sums):
+				if v < minv:
+					minv = v
+					mindex = (x,y)
+			print(mindex)
+			new_order.append(mindex)
+			for i in range(m):
+				for k in range(n):
+					col_sums[i,k]-=value_matrix[i,k,mindex[0],mindex[1]]
+			#col_sums[mindex[0],mindex[1]]=sys.maxsize
+			col_sums[mindex[0],mindex[1]]=5000
+			print(col_sums)
+		print(new_order)
+		# for new_index,old_index in zip(new_order,range(self.n)):
+		# 	for j in range(old_index):
+
+		for row in range(m*n):
+			for col in range(m*n):
+				i = new_order[row][0] #(3,1)
+				k = new_order[row][1]
+				j = new_order[col][0] #(2,1)
+				l = new_order[col][1]
+				C[i,k,j,l] =  value_matrix[new_order[i][0],new_order[i][1], new_order[j][0], new_order[j][1]]
+
+		for i in range(m-1):
+			for k in range(n):
+				for j in range(i+1,m):
+					for l in range(n):
+						C[i,k,j,l] =  value_matrix[new_order[i+k][0],new_order[i+k][1], new_order[j][0], new_order[l][1]]
+		print(C)
+		#TODO possible this could cause issues(make sure c is reordered correctly)
+		self.c = [self.c[i] for i in new_order]
+		if type(self) == Knapsack:
+			for j in range(self.m):
+				self.a[j] = [self.a[j][i] for i in new_order]
+
+p = QSAP(n=2,m=3)
+p.reorder()
