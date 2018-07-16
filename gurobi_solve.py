@@ -882,3 +882,56 @@ def qsap_standard(qsap, **kwargs):
 
 	#return model. no setup time for std
 	return [mdl, 0]
+
+def qsap_ss(qsap, **kwargs):
+	"""
+	Sherali-Smith Linear Formulation
+	"""
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
+
+	#create model and add variables
+	mdl = Model(name='qsap_ss')
+	x = mdl.addVars(m,n,name="binary_var", vtype=GRB.BINARY)
+	s = mdl.addVars(m,n, vtype=GRB.CONTINUOUS)
+	y = mdl.addVars(m,n, vtype=GRB.CONTINUOUS)
+
+	mdl.addConstrs((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+	start = timer()
+	U = np.zeros((m,n))
+	L = np.zeros((m,n))
+	u_bound_mdl = Model(name='upper_bound_model')
+	l_bound_mdl = Model(name='lower_bound_model')
+	u_bound_x = u_bound_mdl.addVars(m,n, ub=1, lb=0)
+	l_bound_x = l_bound_mdl.addVars(m,n, ub=1, lb=0)
+	u_bound_mdl.addConstrs((sum(u_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
+	l_bound_mdl.addConstrs((sum(l_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
+	for i in range(m-1):
+		for k in range(n):
+			u_bound_mdl.setObjective(sum(sum(c[i,k,j,l]*u_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), GRB.MAXIMIZE)
+			l_bound_mdl.setObjective(sum(sum(c[i,k,j,l]*l_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), GRB.MINIMIZE)
+			u_bound_mdl.optimize()
+			l_bound_mdl.optimize()
+			U[i,k] = u_bound_mdl.objVal
+			L[i,k] = l_bound_mdl.objVal
+
+	#add auxiliary constraints
+	for i in range(m-1):
+		for k in range(n):
+			mdl.addConstr(sum(sum(c[i,k,j,l]*x[j,l] for j in range(i+1,m)) for l in range(n))-s[i,k]-L[i,k]==y[i,k])
+			mdl.addConstr(y[i,k] <= (U[i,k]-L[i,k])*(1-x[i,k]))
+			mdl.addConstr(s[i,k] <= (U[i,k]-L[i,k])*x[i,k])
+			mdl.addConstr(y[i,k] >= 0)
+			mdl.addConstr(s[i,k] >= 0)
+
+	#set objective function
+	linear_values = sum(sum(e[i,k]*x[i,k] for i in range(m)) for k in range(n))
+	mdl.setObjective(linear_values + sum(sum(s[i,k]+x[i,k]*(L[i,k]) for i in range(m-1)) for k in range(n)), GRB.MAXIMIZE)
+
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [mdl, setup_time]

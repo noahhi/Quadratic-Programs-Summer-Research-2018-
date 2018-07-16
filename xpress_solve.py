@@ -933,7 +933,59 @@ def qsap_standard(qsap, **kwargs):
 	#return model. no setup time for std
 	return [mdl, 0]
 
-# p = Knapsack()
-# p.print_info(print_C =True)
-# m = extended_linear_formulation(p)[0]
-# print(solve_model(m))
+def qsap_ss(qsap, **kwargs):
+	"""
+	Sherali-Smith Linear Formulation
+	"""
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
+
+	#create model and add variables
+	mdl = xp.problem(name='qsap_ss')
+	x = np.array([[xp.var(vartype=xp.binary) for i in range(n)]for j in range(m)])
+	s = np.array([[xp.var(vartype=xp.continuous) for i in range(n)]for j in range(m)])
+	y = np.array([[xp.var(vartype=xp.continuous) for i in range(n)]for j in range(m)])
+	mdl.addVariable(x,s,y)
+	mdl.addConstraint((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+	start = timer()
+	U = np.zeros((m,n))
+	L = np.zeros((m,n))
+	u_bound_mdl = xp.problem(name='upper_bound_model')
+	u_bound_mdl.setlogfile("xpress.log")
+	l_bound_mdl = xp.problem(name='lower_bound_model')
+	l_bound_mdl.setlogfile("xpress.log")
+	u_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
+	l_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
+	u_bound_mdl.addVariable(u_bound_x)
+	l_bound_mdl.addVariable(l_bound_x)
+	u_bound_mdl.addConstraint((sum(u_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
+	l_bound_mdl.addConstraint((sum(l_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
+	for i in range(m-1):
+		for k in range(n):
+			u_bound_mdl.setObjective(sum(sum(c[i,k,j,l]*u_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.maximize)
+			l_bound_mdl.setObjective(sum(sum(c[i,k,j,l]*l_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.minimize)
+			u_bound_mdl.solve()
+			l_bound_mdl.solve()
+			U[i,k] = u_bound_mdl.getObjVal()
+			L[i,k] = l_bound_mdl.getObjVal()
+
+	#add auxiliary constraints
+	for i in range(m-1):
+		for k in range(n):
+			mdl.addConstraint(sum(sum(c[i,k,j,l]*x[j,l] for j in range(i+1,m)) for l in range(n))-s[i,k]-L[i,k]==y[i,k])
+			mdl.addConstraint(y[i,k] <= (U[i,k]-L[i,k])*(1-x[i,k]))
+			mdl.addConstraint(s[i,k] <= (U[i,k]-L[i,k])*x[i,k])
+			mdl.addConstraint(y[i,k] >= 0)
+			mdl.addConstraint(s[i,k] >= 0)
+
+	#set objective function
+	linear_values = sum(sum(e[i,k]*x[i,k] for i in range(m)) for k in range(n))
+	mdl.setObjective(linear_values + sum(sum(s[i,k]+x[i,k]*(L[i,k]) for i in range(m-1)) for k in range(n)), sense=xp.maximize)
+
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [mdl, setup_time]

@@ -875,3 +875,54 @@ def qsap_standard(qsap, **kwargs):
 
 	#return model. no setup time for std
 	return [mdl, 0]
+
+def qsap_ss(qsap, **kwargs):
+	"""
+	Sherali-Smith Linear Formulation
+	"""
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
+
+	#create model and add variables
+	mdl = Model(name='qsap_ss')
+	x = mdl.binary_var_matrix(m,n,name="binary_var")
+	s = mdl.continuous_var_matrix(m,n)
+	y = mdl.continuous_var_matrix(m,n)
+
+	mdl.add_constraints((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+	start = timer()
+	U = np.zeros((m,n))
+	L = np.zeros((m,n))
+	u_bound_mdl = Model(name='upper_bound_model')
+	l_bound_mdl = Model(name='lower_bound_model')
+	u_bound_x = u_bound_mdl.continuous_var_matrix(keys1=m,keys2=n,ub=1,lb=0)
+	l_bound_x = l_bound_mdl.continuous_var_matrix(keys1=m,keys2=n,ub=1,lb=0)
+	u_bound_mdl.add_constraints((sum(u_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
+	l_bound_mdl.add_constraints((sum(l_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
+	for i in range(m-1):
+		for k in range(n):
+			u_bound_mdl.set_objective(sense="max", expr=sum(sum(c[i,k,j,l]*u_bound_x[j,l] for l in range(n)) for j in range(i+1,m)))
+			l_bound_mdl.set_objective(sense="min", expr=sum(sum(c[i,k,j,l]*l_bound_x[j,l] for l in range(n)) for j in range(i+1,m)))
+			u_bound_mdl.solve()
+			l_bound_mdl.solve()
+			U[i,k] = u_bound_mdl.objective_value
+			L[i,k] = l_bound_mdl.objective_value
+
+	#add auxiliary constraints
+	for i in range(m-1):
+		for k in range(n):
+			mdl.add_constraint(sum(sum(c[i,k,j,l]*x[j,l] for j in range(i+1,m)) for l in range(n))-s[i,k]-L[i,k]==y[i,k])
+			mdl.add_constraint(y[i,k] <= (U[i,k]-L[i,k])*(1-x[i,k]))
+			mdl.add_constraint(s[i,k] <= (U[i,k]-L[i,k])*x[i,k])
+
+	#set objective function
+	linear_values = sum(sum(e[i,k]*x[i,k] for i in range(m)) for k in range(n))
+	mdl.maximize(linear_values + sum(sum(s[i,k]+(x[i,k]*L[i,k]) for i in range(m-1)) for k in range(n)))
+
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [mdl, setup_time]
