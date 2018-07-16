@@ -844,47 +844,34 @@ def qsap_standard(qsap, **kwargs):
 	c = qsap.c
 
 	#create model and add variables
-	m = Model(name='standard_linearization')
-	x = mdl.binary_var_matrix(keys1=m,keys2=n,name="binary_var")
-	w = m.continuous_var_matrix(keys1=n, keys2=n, lb=-m.infinity)
+	mdl = Model(name='qsap_standard_linearization')
+	x = mdl.binary_var_matrix(m,n,name="binary_var")
+	w = np.array([[[[mdl.continuous_var() for i in range(n)]for j in range(m)]
+						for k in range(n)]for l in range(m)])
 
-	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
-		#add capacity constraint(s)
-		for k in range(quad.m):
-			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-
-	#k_item constraint if necessary (if KQKP or HSP)
-	if quad.num_items > 0:
-		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
+	mdl.add_constraints((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
 
 	#add auxiliary constraints
-	for i in range(n):
-		for j in range(i+1,n):
-			if lhs_constraints:
-				if C[i,j] > 0:
-					m.add_constraint(w[i,j] <= x[i])
-					m.add_constraint(w[i,j] <= x[j])
-				else:
-					m.add_constraint(x[i]+x[j]-1 <= w[i,j])
-					m.add_constraint(w[i,j] >= 0)
-			else:
-				m.add_constraint(w[i,j] <= x[i])
-				m.add_constraint(w[i,j] <= x[j])
-				m.add_constraint(x[i]+x[j]-1 <= w[i,j])
-				m.add_constraint(w[i,j] >= 0)
+	#TODO implement lhs here?
+	for i in range(m-1):
+		for k in range(n):
+			for j in range(i+1,m):
+				for l in range(n):
+					mdl.add_constraint(w[i,k,j,l] <= x[i,k])
+					mdl.add_constraint(w[i,k,j,l] <= x[j,l])
+					mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+					mdl.add_constraint(w[i,k,j,l] >= 0)
 
 	#compute quadratic values contirbution to obj
 	quadratic_values = 0
-	for i in range(n):
-		for j in range(i+1,n):
-			quadratic_values = quadratic_values + (w[i,j]*(C[i,j]+C[j,i]))
-	#set objective function
-	if type(quad)==HSP:
-		#HSP doesn't habe any linear terms
-		m.maximize(quadratic_values)
-	else:
-		linear_values = m.sum(x[i]*c[i] for i in range(n))
-		m.maximize(linear_values + quadratic_values)
+	for i in range(m-1):
+		for j in range(i+1,m):
+			for k in range(n):
+				for l in range(n):
+					quadratic_values = quadratic_values + (c[i,k,j,l]*(w[i,k,j,l]))
+
+	linear_values = mdl.sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
+	mdl.maximize(linear_values + quadratic_values)
 
 	#return model. no setup time for std
-	return [m, 0]
+	return [mdl, 0]

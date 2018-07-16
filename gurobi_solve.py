@@ -844,3 +844,41 @@ def ss_linear_formulation(quad, **kwargs):
 	setup_time = end-start
 	#return model + setup time
 	return [m, setup_time]
+
+def qsap_standard(qsap, **kwargs):
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
+
+	#create model and add variables
+	mdl = Model(name='qsap_standard_linearization')
+	x = mdl.addVars(m,n,name="binary_var", vtype=GRB.BINARY)
+	w = mdl.addVars(m,n,m,n, vtype=GRB.CONTINUOUS)
+
+	mdl.addConstrs((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+	#add auxiliary constraints
+	#TODO implement lhs here?
+	for i in range(m-1):
+		for k in range(n):
+			for j in range(i+1,m):
+				for l in range(n):
+					mdl.addConstr(w[i,k,j,l] <= x[i,k])
+					mdl.addConstr(w[i,k,j,l] <= x[j,l])
+					mdl.addConstr(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+					mdl.addConstr(w[i,k,j,l] >= 0)
+
+	#compute quadratic values contirbution to obj
+	quadratic_values = 0
+	for i in range(m-1):
+		for j in range(i+1,m):
+			for k in range(n):
+				for l in range(n):
+					quadratic_values = quadratic_values + (c[i,k,j,l]*(w[i,k,j,l]))
+
+	linear_values = quicksum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
+	mdl.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
+
+	#return model. no setup time for std
+	return [mdl, 0]

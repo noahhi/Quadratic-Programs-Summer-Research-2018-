@@ -894,7 +894,44 @@ def ss_linear_formulation(quad, **kwargs):
 	#return model + setup time
 	return [m, setup_time]
 
+def qsap_standard(qsap, **kwargs):
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
 
+	#create model and add variables
+	mdl = xp.problem(name='qsap_standard_linearization')
+	x = np.array([[xp.var(vartype=xp.binary) for i in range(n)]for j in range(m)])
+	w = np.array([[[[xp.var(vartype=xp.continuous) for i in range(n)]for j in range(m)]
+						for k in range(n)]for l in range(m)])
+	mdl.addVariable(x,w)
+	mdl.addConstraint((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+	#add auxiliary constraints
+	#TODO implement lhs here?
+	for i in range(m-1):
+		for k in range(n):
+			for j in range(i+1,m):
+				for l in range(n):
+					mdl.addConstraint(w[i,k,j,l] <= x[i,k])
+					mdl.addConstraint(w[i,k,j,l] <= x[j,l])
+					mdl.addConstraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+					mdl.addConstraint(w[i,k,j,l] >= 0)
+
+	#compute quadratic values contirbution to obj
+	quadratic_values = 0
+	for i in range(m-1):
+		for j in range(i+1,m):
+			for k in range(n):
+				for l in range(n):
+					quadratic_values = quadratic_values + (c[i,k,j,l]*(w[i,k,j,l]))
+
+	linear_values = sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
+	mdl.setObjective(linear_values + quadratic_values, sense=xp.maximize)
+
+	#return model. no setup time for std
+	return [mdl, 0]
 
 # p = Knapsack()
 # p.print_info(print_C =True)
