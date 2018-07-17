@@ -201,7 +201,7 @@ if __name__=="__main__":
 
 
 	end = timer()
-	print("took {:.3} seconds to run all trials".format(end-start))
+	print("\ntook {:.3} seconds to run all trials".format(end-start))
 
 
 

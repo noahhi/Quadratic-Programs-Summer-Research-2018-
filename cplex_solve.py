@@ -926,3 +926,10 @@ def qsap_ss(qsap, **kwargs):
 	setup_time = end-start
 	#return model + setup time
 	return [mdl, setup_time]
+
+# p = QSAP()
+# print(solve_model(qsap_glovers(p)[0]))
+# print(solve_model(qsap_standard(p)[0]))
+# p.reorder()
+# print(solve_model(qsap_glovers(p)[0]))
+# print(solve_model(qsap_standard(p)[0]))

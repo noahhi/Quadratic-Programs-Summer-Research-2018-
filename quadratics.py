@@ -202,6 +202,8 @@ class QSAP: #quadratic semi assignment problem
 		C = self.c
 		n = self.n
 		m = self.m
+		e = self.e
+		#generate value matrix. a symmetric copy of quadratic terms matrix (all positive)
 		value_matrix = np.zeros(shape=(m,n,m,n))
 		for i in range(m-1):
 			for k in range(n):
@@ -209,13 +211,19 @@ class QSAP: #quadratic semi assignment problem
 					for l in range(n):
 						value_matrix[i,k,j,l] = abs(C[i,k,j,l])
 						value_matrix[j,l,i,k] = abs(C[i,k,j,l])
-		print(value_matrix)
+
+
 		col_sums = np.zeros((m,n))
+		old_order = []
 		new_order = []
+		map = {}
 		for i in range(m):
 			for k in range(n):
+				old_order.append((i,k))
+				#compute 'column' sums. (ie. sum of all j,l terms for an i,k pair)
 				col_sums[i,k] = sum(sum(value_matrix[i,k,j,l] for j in range(m))for l in range(n))
-		print(col_sums)
+
+		#find the minimum col_sum, and record its index as the next elem in our new order
 		for i in range(n*m):
 			minv = col_sums[0,0]
 			mindex = (0,0)
@@ -223,37 +231,22 @@ class QSAP: #quadratic semi assignment problem
 				if v < minv:
 					minv = v
 					mindex = (x,y)
-			print(mindex)
 			new_order.append(mindex)
+			map[old_order[i]] = mindex
 			for i in range(m):
 				for k in range(n):
+					#update other terms according to paper
 					col_sums[i,k]-=value_matrix[i,k,mindex[0],mindex[1]]
-			#col_sums[mindex[0],mindex[1]]=sys.maxsize
-			col_sums[mindex[0],mindex[1]]=5000
-			print(col_sums)
-		print(new_order)
-		# for new_index,old_index in zip(new_order,range(self.n)):
-		# 	for j in range(old_index):
+			#need to ignore/remove current mindex
+			col_sums[mindex[0],mindex[1]]=100000 #could use sys.maxsize
 
-		for row in range(m*n):
-			for col in range(m*n):
-				i = new_order[row][0] #(3,1)
-				k = new_order[row][1]
-				j = new_order[col][0] #(2,1)
-				l = new_order[col][1]
-				C[i,k,j,l] =  value_matrix[new_order[i][0],new_order[i][1], new_order[j][0], new_order[j][1]]
-
+		#apply reordering to quadratic terms matrix
 		for i in range(m-1):
 			for k in range(n):
 				for j in range(i+1,m):
 					for l in range(n):
-						C[i,k,j,l] =  value_matrix[new_order[i+k][0],new_order[i+k][1], new_order[j][0], new_order[l][1]]
-		print(C)
-		#TODO possible this could cause issues(make sure c is reordered correctly)
-		self.c = [self.c[i] for i in new_order]
-		if type(self) == Knapsack:
-			for j in range(self.m):
-				self.a[j] = [self.a[j][i] for i in new_order]
-
-p = QSAP(n=2,m=3)
-p.reorder()
+						(x1,y1) = map[(i,k)]
+						(x2,y2) = map[(j,l)]
+						C[i,k,j,l] =  value_matrix[x1,y1,x2,y2]
+		#apply reordering to linear terms matrix
+		e = np.array([e[i,k] for (i,k) in new_order]).reshape(m,n)
