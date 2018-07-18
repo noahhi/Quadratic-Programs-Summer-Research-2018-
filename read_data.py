@@ -31,6 +31,7 @@ def performance_profile(df, save_loc, variable, formulations):
     data = {}
     for form in formulations:
         form_rows = df[df[variable]==form]
+        #chose from "instance_total_time", "instance_solve_time", "instance_setup_time", "instance_gap"
         form_data = form_rows["instance_solve_time"].tolist()
         data[form] = form_data
     df = pd.DataFrame(data)
@@ -67,11 +68,13 @@ def performance_profile(df, save_loc, variable, formulations):
     linestyles = ["solid", "dashed", "dotted", "dashdot"]
     for f in range(nf):
         xf = r[:,f]
+        print(xf)
         plt.plot(xf,yf, drawstyle="steps", linestyle=linestyles[f])
     plt.title("Performance Profile For {}".format(variable))
     plt.xlabel('Factor of Best Ratio')
     plt.ylabel('Probability')
     plt.legend([form for form in formulations])
+    plt.axis(xmin=1, xmax=10)
 
     plt.savefig(save_loc+"performance_profile")
     plt.show()
@@ -85,7 +88,7 @@ def analyze(df_name, new_folder_name, test_variable, formulations):
         if not new_folder_name=="test":
             os.makedirs(mypath)
         df.to_pickle(mypath+'/dataframe.pkl')
-        #df = df[:-5]   --use this to cut off (5) rows from end if uneven length
+        #df = df[:-5]   #--use this to cut off (5) rows from end if uneven length
         write_report(df, save_loc=mypath)
         performance_profile(df, save_loc=mypath, variable=test_variable, formulations=formulations)
     else:
@@ -100,8 +103,9 @@ corresponding formulation options:
     glover_bounds : ['original', 'tight', 'tighter']
     glover_cons : ['original', 'sub1', 'sub2']
 """
-
-analyze(df_name='test', new_folder_name='kqkp130', test_variable="glover_cons", formulations=['original', 'sub1', 'sub2'])
+#analyze(df_name='test', new_folder_name='test', test_variable="solver", formulations=['cplex', 'gurobi', 'xpress'])
+analyze(df_name='testing', new_folder_name='test', test_variable="method", formulations=["std", "elf", "glover", "ss_linear_formulation"])
+#analyze(df_name='test', new_folder_name='test', test_variable="method", formulations=["qsap_ss", "qsap_elf", "qsap_glover", "qsap_standard"])
 #analyze(df_name='uqp_std_cons', new_folder_name='uqp_std_cons', test_variable="options", formulations=[0, 1])
 #analyze(df_name='gloverbounds', new_folder_name='glover_bounds', test_variable="glover_bounds", formulations=['original', 'tight', 'tighter'])
 

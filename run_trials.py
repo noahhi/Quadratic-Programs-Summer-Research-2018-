@@ -70,7 +70,7 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 			cur_solver = get_solver(solver)
 
 			def get_method(method_):
-				if method_=="std":
+				if method=="std" or method=="standard":
 					return cur_solver.standard_linearization
 				elif method=="glover":
 					return cur_solver.glovers_linearization
@@ -78,8 +78,18 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 					return cur_solver.glovers_linearization_rlt
 				elif method=="glover_prlt":
 					return cur_solver.glovers_linearization_prlt
-				elif method=="glover_qsap":
+				elif method=="qsap_glover":
 					return cur_solver.qsap_glovers
+				elif method=="qsap_elf":
+					return cur_solver.qsap_elf
+				elif method=="elf":
+					return cur_solver.extended_linear_formulation
+				elif method=="qsap_standard":
+					return cur_solver.qsap_standard
+				elif method=="qsap_ss":
+					return cur_solver.qsap_ss
+				elif method=="ss_linear_formulation":
+					return cur_solver.ss_linear_formulation
 				elif method=="no_lin":
 					return cur_solver.no_linearization
 				else:
@@ -99,7 +109,7 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 				results = cur_solver.solve_model(m[0])
 
 			#retrieve info from solving instance
-			if method=='glover' and (glover_bounds=="tight" or glover_bounds=="tighter"):
+			if 'ss' in method or (method=='glover' and (glover_bounds=="tight" or glover_bounds=="tighter")):
 				instance_setup_time = m[1]
 			else:
 				instance_setup_time = 0
@@ -145,7 +155,7 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 		df = pd.DataFrame(data_)
 		df = df[["trial","solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
 					"density", "multiple", "instance_gap","instance_setup_time", "instance_solve_time", "instance_total_time", "instance_obj_val"]]  #reorder columns
-		df.to_pickle('dataframes/test.pkl')
+		df.to_pickle('dataframes/testing.pkl')
 		#return results across trials
 		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":int_gap_sum/trials,
 					"avg_total_time":(setup_time_sum+solve_time_sum)/trials, "std_dev":np.std(instance_total_times),
@@ -166,32 +176,32 @@ if __name__=="__main__":
 	"""
 	solver = solver to use ("cplex", "gurobi")
 	type = problem type ("QKP", "KQKP", "UQP", "HSP", "QSAP")
-	method = linearization technique ("std", "glover", "glover_rlt", "glover_prlt", "qsap_glover", "no_lin")
+	method = linearization technique ("std", "glover", "glover_rlt", "glover_prlt", "qsap_glover","qsap_elf","elf", "no_lin")
 	glover_bounds = simple ub, continuous program ub, or binary ub ("original", "tight", "tighter")
 	glover_cons = ("original", "sub1", "sub2")
 	options = specify alternative/optional constraints specific to each linearization
 	"""
 	start = timer()
-	num_trials = 5
-	sizes = [130]
-	densities = [50]
+	num_trials = 1
+	sizes = [30]
+	densities = [75,100]
 	solvers = ["cplex", "xpress", "gurobi"]
-	types = ["KQKP"]
-	methods = ["glover"]
-	bounds = ["tight","tighter","original"]
-	cons = ["original", "sub1", "sub2"]
-	signs = [False, True]
+	types = ["QKP"]
+	methods = ["std", "elf", "glover", "ss_linear_formulation"]
+	bounds = ["tight"]
+	cons = ["sub1"]
+	signs = [False]
 	multiples = [1]
 	symmetric = [False]
 	data = []
-	for sign in signs:
-		for solve_with in solvers:
+	for j in densities:
+		for sign in signs:
 			for i in sizes:
-				for type in types:
-					for bound in bounds:
-						for con in cons:
-							for method in methods:
-								for j in densities:
+				for solve_with in solvers:
+					for type in types:
+						for bound in bounds:
+							for con in cons:
+								for method in methods:
 									for mult in multiples:
 										for sym in symmetric:
 											print("running-(solver-{}, size-{}, density-{}, type-{}, method-{}, bound-{}, cons-{}, mixed_sign-{}, multiple-{}, symmetric-{})".format(
