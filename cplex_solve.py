@@ -45,18 +45,15 @@ def standard_linearization(quad, lhs_constraints=True, **kwargs):
 	for i in range(n):
 		for j in range(i+1,n):
 			quadratic_values = quadratic_values + (w[i,j]*(C[i,j]+C[j,i]))
-	#set objective function
-	if type(quad)==HSP:
-		#HSP doesn't habe any linear terms
-		m.maximize(quadratic_values)
-	else:
-		linear_values = m.sum(x[i]*c[i] for i in range(n))
-		m.maximize(linear_values + quadratic_values)
+
+	linear_values = m.sum(x[i]*c[i] for i in range(n))
+	#set objective function (note - hsp has linear terms=0)
+	m.maximize(linear_values + quadratic_values)
 
 	#return model. no setup time for std
 	return [m, 0]
 
-def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False):
+def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False, **kwargs):
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -187,10 +184,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 			m.add_constraint(z[j] <= tempsum - L0[j]*(1-x[j]))
 			if lhs_constraints:
 				m.add_constraint(z[j] >= tempsum - U0[j]*(1-x[j]))
-		if type(quad) is HSP:
-			m.maximize(m.sum(z[j] for j in range(n)))
-		else:
-			m.maximize(m.sum(c[j]*x[j] + z[j] for j in range(n)))
+		m.maximize(m.sum(c[j]*x[j] + z[j] for j in range(n)))
 
 	elif(constraints=="sub1" or constraints=="sub2"):
 		#can make one of 2 substitutions using slack variables to further reduce # of constraints
@@ -211,7 +205,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	#return model
 	return [m,setup_time]
 
-def glovers_linearization_prlt(quad):
+def glovers_linearization_prlt(quad, **kwargs):
 	def prlt1_linearization(quad): #only called from within reformulate_glover (make inner func?)
 		n = quad.n
 		c = quad.c
@@ -252,11 +246,9 @@ def glovers_linearization_prlt(quad):
 				if(i==j):
 					continue
 				quadratic_values = quadratic_values + (C[i,j]*w[i,j])
-		if type(quad) is HSP:
-			m.maximize(quadratic_values)
-		else:
-			linear_values = m.sum(x[j]*c[j] for j in range(n))
-			m.maximize(linear_values + quadratic_values)
+
+		linear_values = m.sum(x[j]*c[j] for j in range(n))
+		m.maximize(linear_values + quadratic_values)
 
 		#return model
 		return m
@@ -290,7 +282,7 @@ def glovers_linearization_prlt(quad):
 	return [new_m, setup_time]
 
 #TODO glovers_rlt currently works only for knapsack w/ original constraints
-def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
+def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kwargs):
 	def rlt1_linearization(quad):
 		n = quad.n
 		c = quad.c
@@ -344,11 +336,9 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 				if(i==j):
 					continue
 				quadratic_values = quadratic_values + (C[i,j]*w[i,j])
-		if type(quad) is HSP:
-			m.maximize(quadratic_values)
-		else:
-			linear_values = m.sum(x[j]*c[j] for j in range(n))
-			m.maximize(linear_values + quadratic_values)
+
+		linear_values = m.sum(x[j]*c[j] for j in range(n))
+		m.maximize(linear_values + quadratic_values)
 
 		#return model
 		return m
@@ -492,86 +482,154 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	#return model
 	return [m,setup_time]
 
-def solve_model(model, solve_relax=True):
-	#use with block to automatically call m.end() when finished
-	with model as m:
-		time_limit = False
-		m.set_time_limit(3600)
-		start = timer()
-		m.solve()
-		end = timer()
-		if("FEASIBLE" in str(m.get_solve_status())):
-			print('time limit exceeded')
-			time_limit=True
-		solve_time = end-start
-		objective_value = m.objective_value
-		#print(objective_value)
-
-		if solve_relax and not time_limit:
-			#compute continuous relaxation and integrality_gap
-			i = 0
-			while m.get_var_by_name("binary_var_"+str(i)) is not None:
-				relaxation_var = m.get_var_by_name("binary_var_"+str(i))
-				m.set_var_type(relaxation_var,m.continuous_vartype)
-				i+=1
-
-			#TODO this is ugly way to find all binary vars for QSAP and relax themself.
-			#could use method I use in gurobi?
-			if i == 0: #this should only happen if model is for a QSAP problem
-				j = 0
-				while m.get_var_by_name("binary_var_"+str(i)+"_"+str(j)) is not None:
-					j=0
-					while m.get_var_by_name("binary_var_"+str(i)+"_"+str(j)) is not None:
-						relaxation_var = m.get_var_by_name("binary_var_"+str(i)+"_"+str(j))
-						m.set_var_type(relaxation_var,m.continuous_vartype)
-						j+=1
-					j-=1
-					i+=1
-
-			m.solve()
-			continuous_obj_value = m.objective_value
-			integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
-		else:
-			continuous_obj_value = -1
-			integrality_gap = -1
-
-
-	#create and return results dictionary
-	results = {"solve_time":solve_time,
-				"objective_value":objective_value,
-				"relaxed_solution":continuous_obj_value,
-				"integrality_gap":integrality_gap,
-				"time_limit":time_limit}
-	return results
-
-def no_linearization(quad, **kwargs):
+def extended_linear_formulation(quad, **kwargs):
 	n = quad.n
 	c = quad.c
-	m = Model(name='no_linearization')
+	C = quad.C
+	a = quad.a
+	b = quad.b
+
+	#create model and add variables
+	m = Model(name='extended_linear_formulation')
 	x = m.binary_var_list(n, name="binary_var")
+	z = m.continuous_var_cube(keys1=n, keys2=n, keys3=n, lb=-m.infinity)
+
 	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
 		#add capacity constraint(s)
 		for k in range(quad.m):
-			m.add_constraint(m.sum(x[i]*quad.a[k][i] for i in range(n)) <= quad.b[k])
+			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
 	#k_item constraint if necessary (if KQKP or HSP)
 	if quad.num_items > 0:
 		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
 
+	#add auxiliary constraints
+	for i in range(n):
+		for j in range(i+1,n):
+			m.add_constraint(z[i,i,j]+z[j,i,j] <= 1)
+			if C[i,j] < 0:
+				m.add_constraint(x[i] + z[i,i,j] <= 1)
+				m.add_constraint(x[j] + z[j,i,j] <= 1)
+			elif C[i,j] > 0:
+				m.add_constraint(x[i] + z[i,i,j] + z[j,i,j] >= 1)
+				m.add_constraint(x[j] + z[i,i,j] + z[j,i,j] >= 1)
+
 	#compute quadratic values contirbution to obj
+	constant = 0
 	quadratic_values = 0
 	for i in range(n):
 		for j in range(i+1,n):
-			quadratic_values = quadratic_values + (x[i]*x[j]*quad.C[i,j])
+			constant = constant + C[i,j]
+			quadratic_values = quadratic_values + (C[i,j]*(z[i,i,j]+z[j,i,j]))
 	#set objective function
-	if type(quad)==HSP:
-		#HSP doesn't habe any linear terms
-		m.maximize(quadratic_values)
-	else:
-		linear_values = m.sum(x[i]*c[i] for i in range(n))
-		m.maximize(linear_values + quadratic_values)
 
+	linear_values = m.sum(x[i]*c[i] for i in range(n))
+	m.maximize(linear_values + constant - quadratic_values)
+
+	#return model + setup time=0
 	return [m, 0]
+
+def ss_linear_formulation(quad, **kwargs):
+	"""
+	Sherali-Smith Linear Formulation
+	"""
+	n = quad.n
+	c = quad.c
+	C = quad.C
+	a = quad.a
+	b = quad.b
+
+	#create model and add variables
+	m = Model(name='ss_linear_formulation')
+	x = m.binary_var_list(n, name="binary_var")
+	s = m.continuous_var_list(n)
+	y = m.continuous_var_list(n)
+
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
+
+	start = timer()
+	U = np.zeros(n)
+	L = np.zeros(n)
+	u_bound_m = Model(name='upper_bound_model')
+	l_bound_m = Model(name='lower_bound_model')
+	u_bound_x = u_bound_m.continuous_var_list(n, ub=1, lb=0)
+	l_bound_x = l_bound_m.continuous_var_list(n, ub=1, lb=0)
+	if type(quad) is Knapsack:
+		for k in range(quad.m):
+			#add capacity constraints
+			u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+			l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+	if quad.num_items > 0:
+		u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i] for i in range(n)) == quad.num_items)
+		l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i] for i in range(n)) == quad.num_items)
+	for i in range(n):
+		#for each col, solve model to find upper/lower bound
+		u_bound_m.set_objective(sense="max", expr=u_bound_m.sum(C[i,j]*u_bound_x[j] for j in range(n)))
+		l_bound_m.set_objective(sense="min", expr=l_bound_m.sum(C[i,j]*l_bound_x[j] for j in range(n)))
+		u_bound_m.solve()
+		l_bound_m.solve()
+		U[i] = u_bound_m.objective_value
+		L[i] = l_bound_m.objective_value
+	end = timer()
+	setup_time = end-start
+	#add auxiliary constraints
+	for i in range(n):
+		m.add_constraint(sum(C[i,j]*x[j] for j in range(n))-s[i]-L[i]==y[i])
+		m.add_constraint(y[i] <= (U[i]-L[i])*(1-x[i]))
+		m.add_constraint(s[i] <= (U[i]-L[i])*x[i])
+		m.add_constraint(y[i] >= 0)
+		m.add_constraint(s[i] >= 0)
+
+	#set objective function
+	m.maximize(sum(s[i]+x[i]*(c[i]+L[i])for i in range(n)))
+	#return model + setup time
+	return [m, setup_time]
+
+def qsap_standard(qsap, **kwargs):
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
+
+	#create model and add variables
+	mdl = Model(name='qsap_standard_linearization')
+	x = mdl.binary_var_matrix(m,n,name="binary_var")
+	w = np.array([[[[mdl.continuous_var() for i in range(n)]for j in range(m)]
+						for k in range(n)]for l in range(m)])
+
+	mdl.add_constraints((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+	#add auxiliary constraints
+	#TODO implement lhs here?
+	for i in range(m-1):
+		for k in range(n):
+			for j in range(i+1,m):
+				for l in range(n):
+					mdl.add_constraint(w[i,k,j,l] <= x[i,k])
+					mdl.add_constraint(w[i,k,j,l] <= x[j,l])
+					mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+					mdl.add_constraint(w[i,k,j,l] >= 0)
+
+	#compute quadratic values contirbution to obj
+	quadratic_values = 0
+	for i in range(m-1):
+		for j in range(i+1,m):
+			for k in range(n):
+				for l in range(n):
+					quadratic_values = quadratic_values + (c[i,k,j,l]*(w[i,k,j,l]))
+
+	linear_values = mdl.sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
+	mdl.maximize(linear_values + quadratic_values)
+
+	#return model. no setup time for std
+	return [mdl, 0]
 
 def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, **kwargs):
 	start = timer()
@@ -682,56 +740,6 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	#return model
 	return [mdl,setup_time]
 
-def extended_linear_formulation(quad, **kwargs):
-	n = quad.n
-	c = quad.c
-	C = quad.C
-	a = quad.a
-	b = quad.b
-
-	#create model and add variables
-	m = Model(name='extended_linear_formulation')
-	x = m.binary_var_list(n, name="binary_var")
-	z = m.continuous_var_cube(keys1=n, keys2=n, keys3=n, lb=-m.infinity)
-
-	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
-		#add capacity constraint(s)
-		for k in range(quad.m):
-			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-
-	#k_item constraint if necessary (if KQKP or HSP)
-	if quad.num_items > 0:
-		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
-
-	#add auxiliary constraints
-	for i in range(n):
-		for j in range(i+1,n):
-			m.add_constraint(z[i,i,j]+z[j,i,j] <= 1)
-			if C[i,j] < 0:
-				m.add_constraint(x[i] + z[i,i,j] <= 1)
-				m.add_constraint(x[j] + z[j,i,j] <= 1)
-			elif C[i,j] > 0:
-				m.add_constraint(x[i] + z[i,i,j] + z[j,i,j] >= 1)
-				m.add_constraint(x[j] + z[i,i,j] + z[j,i,j] >= 1)
-
-	#compute quadratic values contirbution to obj
-	constant = 0
-	quadratic_values = 0
-	for i in range(n):
-		for j in range(i+1,n):
-			constant = constant + C[i,j]
-			quadratic_values = quadratic_values + (C[i,j]*(z[i,i,j]+z[j,i,j]))
-	#set objective function
-	if type(quad)==HSP:
-		#HSP doesn't habe any linear terms
-		m.maximize(constant-quadratic_values)
-	else:
-		linear_values = m.sum(x[i]*c[i] for i in range(n))
-		m.maximize(linear_values + constant - quadratic_values)
-
-	#return model + setup time=0
-	return [m, 0]
-
 def qsap_elf(qsap, **kwargs):
 	n = qsap.n
 	m = qsap.m
@@ -770,114 +778,6 @@ def qsap_elf(qsap, **kwargs):
 	#return model + setup time=0
 	return [mdl, 0]
 
-def ss_linear_formulation(quad, **kwargs):
-	"""
-	Sherali-Smith Linear Formulation
-	"""
-	n = quad.n
-	c = quad.c
-	C = quad.C
-	a = quad.a
-	b = quad.b
-
-	#create model and add variables
-	m = Model(name='ss_linear_formulation')
-	x = m.binary_var_list(n, name="binary_var")
-	s = m.continuous_var_list(n)
-	y = m.continuous_var_list(n)
-
-	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
-		#add capacity constraint(s)
-		for k in range(quad.m):
-			m.add_constraint(m.sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-
-	#k_item constraint if necessary (if KQKP or HSP)
-	if quad.num_items > 0:
-		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
-
-	start = timer()
-	U = np.zeros(n)
-	L = np.zeros(n)
-	u_bound_m = Model(name='upper_bound_model')
-	l_bound_m = Model(name='lower_bound_model')
-	u_bound_x = u_bound_m.continuous_var_list(n, ub=1, lb=0)
-	l_bound_x = l_bound_m.continuous_var_list(n, ub=1, lb=0)
-	if type(quad) is Knapsack:
-		for k in range(quad.m):
-			#add capacity constraints
-			u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
-			l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
-	if quad.num_items > 0:
-		u_bound_m.add_constraint(u_bound_m.sum(u_bound_x[i] for i in range(n)) == quad.num_items)
-		l_bound_m.add_constraint(l_bound_m.sum(l_bound_x[i] for i in range(n)) == quad.num_items)
-	for i in range(n):
-		#for each col, solve model to find upper/lower bound
-		u_bound_m.set_objective(sense="max", expr=u_bound_m.sum(C[i,j]*u_bound_x[j] for j in range(n)))
-		l_bound_m.set_objective(sense="min", expr=l_bound_m.sum(C[i,j]*l_bound_x[j] for j in range(n)))
-		u_bound_m.solve()
-		l_bound_m.solve()
-		U[i] = u_bound_m.objective_value
-		L[i] = l_bound_m.objective_value
-
-	#add auxiliary constraints
-	for i in range(n):
-		m.add_constraint(sum(C[i,j]*x[j] for j in range(n))-s[i]-L[i]==y[i])
-		m.add_constraint(y[i] <= (U[i]-L[i])*(1-x[i]))
-		m.add_constraint(s[i] <= (U[i]-L[i])*x[i])
-		m.add_constraint(y[i] >= 0)
-		m.add_constraint(s[i] >= 0)
-
-	#set objective function
-	if type(quad)==HSP:
-		#HSP doesn't habe any linear terms
-		m.maximize(sum(s[i]+x[i]*(L[i])for i in range(n)))
-	else:
-		m.maximize(sum(s[i]+x[i]*(c[i]+L[i])for i in range(n)))
-
-	end = timer()
-	setup_time = end-start
-	#return model + setup time
-	return [m, setup_time]
-
-def qsap_standard(qsap, **kwargs):
-	n = qsap.n
-	m = qsap.m
-	e = qsap.e
-	c = qsap.c
-
-	#create model and add variables
-	mdl = Model(name='qsap_standard_linearization')
-	x = mdl.binary_var_matrix(m,n,name="binary_var")
-	w = np.array([[[[mdl.continuous_var() for i in range(n)]for j in range(m)]
-						for k in range(n)]for l in range(m)])
-
-	mdl.add_constraints((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
-
-	#add auxiliary constraints
-	#TODO implement lhs here?
-	for i in range(m-1):
-		for k in range(n):
-			for j in range(i+1,m):
-				for l in range(n):
-					mdl.add_constraint(w[i,k,j,l] <= x[i,k])
-					mdl.add_constraint(w[i,k,j,l] <= x[j,l])
-					mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
-					mdl.add_constraint(w[i,k,j,l] >= 0)
-
-	#compute quadratic values contirbution to obj
-	quadratic_values = 0
-	for i in range(m-1):
-		for j in range(i+1,m):
-			for k in range(n):
-				for l in range(n):
-					quadratic_values = quadratic_values + (c[i,k,j,l]*(w[i,k,j,l]))
-
-	linear_values = mdl.sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
-	mdl.maximize(linear_values + quadratic_values)
-
-	#return model. no setup time for std
-	return [mdl, 0]
-
 def qsap_ss(qsap, **kwargs):
 	"""
 	Sherali-Smith Linear Formulation
@@ -912,7 +812,8 @@ def qsap_ss(qsap, **kwargs):
 			l_bound_mdl.solve()
 			U[i,k] = u_bound_mdl.objective_value
 			L[i,k] = l_bound_mdl.objective_value
-
+	end = timer()
+	setup_time = end-start
 	#add auxiliary constraints
 	for i in range(m-1):
 		for k in range(n):
@@ -924,26 +825,92 @@ def qsap_ss(qsap, **kwargs):
 	linear_values = sum(sum(e[i,k]*x[i,k] for i in range(m)) for k in range(n))
 	mdl.maximize(linear_values + sum(sum(s[i,k]+(x[i,k]*L[i,k]) for i in range(m-1)) for k in range(n)))
 
-	end = timer()
-	setup_time = end-start
 	#return model + setup time
 	return [mdl, setup_time]
 
-# p = Knapsack()
-# p.reorder(flip_order=True, take_max=True)
-# m = glovers_linearization(p)[0]
-# print(solve_model(m))
+def no_linearization(quad, **kwargs):
+	n = quad.n
+	c = quad.c
+	m = Model(name='no_linearization')
+	x = m.binary_var_list(n, name="binary_var")
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.add_constraint(m.sum(x[i]*quad.a[k][i] for i in range(n)) <= quad.b[k])
 
-# p = UQP()
-# print(solve_model(glovers_linearization(p)[0]))
-# p.reorder(flip_order=True, take_max=False)
-# print(solve_model(glovers_linearization(p)[0]))
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.add_constraint(m.sum(x[i] for i in range(n)) == quad.num_items)
+
+	#compute quadratic values contirbution to obj
+	quadratic_values = 0
+	for i in range(n):
+		for j in range(i+1,n):
+			quadratic_values = quadratic_values + (x[i]*x[j]*quad.C[i,j])
+	#set objective function
+	linear_values = m.sum(x[i]*c[i] for i in range(n))
+	m.maximize(linear_values + quadratic_values)
+
+	return [m, 0]
+
+def solve_model(model, solve_relax=True, **kwargs):
+	#use with block to automatically call m.end() when finished
+	with model as m:
+		time_limit = False
+		m.set_time_limit(3600)
+		start = timer()
+		m.solve()
+		end = timer()
+		if("FEASIBLE" in str(m.get_solve_status())):
+			print('time limit exceeded')
+			time_limit=True
+		solve_time = end-start
+		objective_value = m.objective_value
+		#print(objective_value)
+
+		if solve_relax and not time_limit:
+			#compute continuous relaxation and integrality_gap
+			i = 0
+			while m.get_var_by_name("binary_var_"+str(i)) is not None:
+				relaxation_var = m.get_var_by_name("binary_var_"+str(i))
+				m.set_var_type(relaxation_var,m.continuous_vartype)
+				i+=1
+
+			#TODO this is ugly way to find all binary vars for QSAP and relax themself.
+			#could use method I use in gurobi?
+			if i == 0: #this should only happen if model is for a QSAP problem
+				j = 0
+				while m.get_var_by_name("binary_var_"+str(i)+"_"+str(j)) is not None:
+					j=0
+					while m.get_var_by_name("binary_var_"+str(i)+"_"+str(j)) is not None:
+						relaxation_var = m.get_var_by_name("binary_var_"+str(i)+"_"+str(j))
+						m.set_var_type(relaxation_var,m.continuous_vartype)
+						j+=1
+					j-=1
+					i+=1
+
+			m.solve()
+			continuous_obj_value = m.objective_value
+			integrality_gap=((continuous_obj_value-objective_value)/objective_value)*100
+		else:
+			continuous_obj_value = -1
+			integrality_gap = -1
+
+
+	#create and return results dictionary
+	results = {"solve_time":solve_time,
+				"objective_value":objective_value,
+				"relaxed_solution":continuous_obj_value,
+				"integrality_gap":integrality_gap,
+				"time_limit":time_limit}
+	return results
+
 
 # p = QSAP(n=3,m=4)
 # print(solve_model(qsap_glovers(p)[0]))
 # p.reorder(take_max=False, flip_order=False)
 # print(solve_model(qsap_glovers(p)[0]))
 
-p = Knapsack(n=15)
-print(solve_model(glovers_linearization(p)[0]))
-print(solve_model(glovers_linearization_rlt(p)[0]))
+# p = Knapsack(n=15)
+# print(solve_model(glovers_linearization(p)[0]))
+# print(solve_model(glovers_linearization_rlt(p)[0]))
