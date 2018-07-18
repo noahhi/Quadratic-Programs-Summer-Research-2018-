@@ -51,12 +51,8 @@ def standard_linearization(quad, lhs_constraints=True, **kwargs):
 		for j in range(i+1, n):
 			quadratic_values = quadratic_values + (w[i, j]*(C[i, j]+C[j, i]))
 	# set objective function
-	if type(quad) == HSP:
-		#HSP doesn't habe any linear terms
-		m.setObjective(quadratic_values, sense=xp.maximize)
-	else:
-		linear_values = sum(x[i]*c[i] for i in range(n))
-		m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
+	linear_values = sum(x[i]*c[i] for i in range(n))
+	m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
 
 	# return model + setup time
 	return [m, 0]
@@ -200,10 +196,8 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 			m.addConstraint(z[j] <= tempsum - L0[j]*(1-x[j]))
 			if lhs_constraints:
 				m.addConstraint(z[j] >= tempsum - U0[j]*(1-x[j]))
-		if type(quad) is HSP:
-			m.setObjective(xp.Sum(z[j] for j in range(n)), sense=xp.maximize)
-		else:
-			m.setObjective(xp.Sum(c[j]*x[j] + z[j] for j in range(n)), sense=xp.maximize)
+
+		m.setObjective(xp.Sum(c[j]*x[j] + z[j] for j in range(n)), sense=xp.maximize)
 
 
 	elif(constraints=="sub1" or constraints=="sub2"):
@@ -268,11 +262,9 @@ def glovers_linearization_prlt(quad):
 				if(i == j):
 					continue
 				quadratic_values = quadratic_values + (C[i, j]*w[i, j])
-		if type(quad) is HSP:
-			m.setObjective(quadratic_values, sense=xp.maximize)
-		else:
-			m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
-			linear_values = xp.Sum(x[j]*c[j] for j in range(n))
+
+		m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
+		linear_values = xp.Sum(x[j]*c[j] for j in range(n))
 
 		# return model
 		return m
@@ -363,11 +355,9 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 				if(i == j):
 					continue
 				quadratic_values = quadratic_values + (C[i, j]*w[i, j])
-		if type(quad) is HSP:
-			m.setObjective(quadratic_values, sense=xp.maximize)
-		else:
-			linear_values = xp.Sum(x[j]*c[j] for j in range(n))
-			m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
+
+		linear_values = xp.Sum(x[j]*c[j] for j in range(n))
+		m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
 
 
 		# return model
@@ -514,91 +504,164 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	# return model
 	return [m, setup_time]
 
-def solve_model(m, solve_relax=True):
-	"""
-	Takes in an unsolved gurobi model of a MIP. Solves it as well as continuous
-	relaxation and returns a dictionary containing relevant solve details
-	"""
-	# turn off model output. otherwise prints bunch of info, clogs console
-	m.setlogfile("xpress.log")
-	time_limit = False
-	# start timer and solve model
-	m.controls.maxtime = 3600
-	start = timer()
-	m.solve()
-	end = timer()
-	if("optimal" not in str(m.getProbStatusString())):
-		print('time limit exceeded')
-		time_limit=True
-	solve_time = end-start
-	objective_value = m.getObjVal()
-
-
-	if solve_relax and not time_limit:
-		# relax and solve to get continuous relaxation and integrality_gap
-		#cols = []
-		#m.getcoltype(cols,0,m.attributes.cols-1)
-		#print(cols)
-		#cols = np.asarray(cols)
-		#bin_cols = [cols == 'B']
-		#print(bin_cols)
-		#m.chgcoltype(range(10),['C','C','C','C','C','C','C','C','C','C'])
-		vars = m.getVariable()
-		#TODO this is inneficient
-		for index,var in enumerate(vars):
-			if var.vartype == 1: #1 means binary
-				m.chgcoltype([index],['C'])
-
-		m.solve()
-		continuous_obj_value = m.getObjVal()
-		integrality_gap = ((continuous_obj_value-objective_value)/objective_value)*100
-	else:
-		continuous_obj_value = -1
-		integrality_gap = -1
-	# terminate model so not allocating resources
-	#m.close()
-
-
-	# create and return results dictionary
-	results = {"solve_time": solve_time,
-			   "objective_value": objective_value,
-			   "relaxed_solution": continuous_obj_value,
-			   "integrality_gap": integrality_gap,
-				"time_limit":time_limit}
-	return results
-
-def no_linearization(quad, **kwargs):
+def extended_linear_formulation(quad, **kwargs):
 	start = timer()
 	n = quad.n
 	c = quad.c
-	m = xp.problem(name='no_linearization')
+	C = quad.C
+	a = quad.a
+	b = quad.b
+
+	#create model and add variables
+	m = xp.problem(name='extended_linear_formulation')
 	x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
-	m.addVariable(x)
+	z = np.array([[[xp.var(vartype=xp.continuous, lb=-xp.infinity) for i in range(n)] for j in range(n)] for k in range(n)])
+	m.addVariable(x,z)
 
 	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
 		#add capacity constraint(s)
 		for k in range(quad.m):
-			m.addConstraint(xp.Sum(x[i]*quad.a[k][i] for i in range(n)) <= quad.b[k])
+			m.addConstraint(xp.Sum(x[i]*a[k][i] for i in range(n)) <= b[k])
 
 	#k_item constraint if necessary (if KQKP or HSP)
 	if quad.num_items > 0:
 		m.addConstraint(xp.Sum(x[i] for i in range(n)) == quad.num_items)
 
+	#add auxiliary constraints
+	for i in range(n):
+		for j in range(i+1,n):
+			m.addConstraint(z[i,i,j]+z[j,i,j] <= 1)
+			if C[i,j] < 0:
+				m.addConstraint(x[i] + z[i,i,j] <= 1)
+				m.addConstraint(x[j] + z[j,i,j] <= 1)
+			elif C[i,j] > 0:
+				m.addConstraint(x[i] + z[i,i,j] + z[j,i,j] >= 1)
+				m.addConstraint(x[j] + z[i,i,j] + z[j,i,j] >= 1)
+
 	#compute quadratic values contirbution to obj
+	constant = 0
 	quadratic_values = 0
 	for i in range(n):
 		for j in range(i+1,n):
-			quadratic_values = quadratic_values + (x[i]*x[j]*quad.C[i,j])
+			constant = constant + C[i,j]
+			quadratic_values = quadratic_values + (C[i,j]*(z[i,i,j]+z[j,i,j]))
 	#set objective function
-	if type(quad)==HSP:
-		#HSP doesn't habe any linear terms
-		m.setObjective(quadratic_values, sense=xp.maximize)
-	else:
-		linear_values = xp.Sum(x[i]*c[i] for i in range(n))
-		m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
+	linear_values = xp.Sum(x[i]*c[i] for i in range(n))
+	m.setObjective(linear_values + constant - quadratic_values, sense=xp.maximize)
+
 	end = timer()
 	setup_time = end-start
+	#return model + setup time
 	return [m, setup_time]
+
+def ss_linear_formulation(quad, **kwargs):
+	"""
+	Sherali-Smith Linear Formulation
+	"""
+	start = timer()
+	n = quad.n
+	c = quad.c
+	C = quad.C
+	a = quad.a
+	b = quad.b
+
+	#create model and add variables
+	m = xp.problem(name='ss_linear_formulation')
+	x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
+	s = np.array([xp.var(vartype=xp.continuous) for i in range(n)])
+	y = np.array([xp.var(vartype=xp.continuous) for i in range(n)])
+	m.addVariable(x,y,s)
+
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.addConstraint(xp.Sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.addConstraint(xp.Sum(x[i] for i in range(n)) == quad.num_items)
+
+	U = np.zeros(n)
+	L = np.zeros(n)
+	u_bound_m = xp.problem(name='upper_bound_model')
+	l_bound_m = xp.problem(name='lower_bound_model')
+	u_bound_m.setlogfile("xpress.log")
+	l_bound_m.setlogfile("xpress.log")
+	u_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
+	l_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
+	u_bound_m.addVariable(u_bound_x)
+	l_bound_m.addVariable(l_bound_x)
+	if type(quad) is Knapsack:
+		for k in range(quad.m):
+			#add capacity constraints
+			u_bound_m.addConstraint(xp.Sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+			l_bound_m.addConstraint(xp.Sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+	if quad.num_items > 0:
+		u_bound_m.addConstraint(xp.Sum(u_bound_x[i] for i in range(n)) == quad.num_items)
+		l_bound_m.addConstraint(xp.Sum(l_bound_x[i] for i in range(n)) == quad.num_items)
+	for i in range(n):
+		#for each col, solve model to find upper/lower bound
+		u_bound_m.setObjective(xp.Sum(C[i,j]*u_bound_x[j] for j in range(n)), sense=xp.maximize)
+		l_bound_m.setObjective(xp.Sum(C[i,j]*l_bound_x[j] for j in range(n)), sense=xp.minimize)
+		u_bound_m.solve()
+		l_bound_m.solve()
+		U[i] = u_bound_m.getObjVal()
+		L[i] = l_bound_m.getObjVal()
+
+	#add auxiliary constraints
+	for i in range(n):
+		m.addConstraint(sum(C[i,j]*x[j] for j in range(n))-s[i]-L[i]==y[i])
+		m.addConstraint(y[i] <= (U[i]-L[i])*(1-x[i]))
+		m.addConstraint(s[i] <= (U[i]-L[i])*x[i])
+		m.addConstraint(y[i] >= 0)
+		m.addConstraint(s[i] >= 0)
+
+	#set objective function
+	m.setObjective(sum(s[i]+x[i]*(c[i]+L[i])for i in range(n)), sense=xp.maximize)
+
+	end = timer()
+	setup_time = end-start
+	#return model + setup time
+	return [m, setup_time]
+
+def qsap_standard(qsap, **kwargs):
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
+
+	#create model and add variables
+	mdl = xp.problem(name='qsap_standard_linearization')
+	x = np.array([[xp.var(vartype=xp.binary) for i in range(n)]for j in range(m)])
+	w = np.array([[[[xp.var(vartype=xp.continuous) for i in range(n)]for j in range(m)]
+						for k in range(n)]for l in range(m)])
+	mdl.addVariable(x,w)
+	mdl.addConstraint((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+	#add auxiliary constraints
+	#TODO implement lhs here?
+	for i in range(m-1):
+		for k in range(n):
+			for j in range(i+1,m):
+				for l in range(n):
+					mdl.addConstraint(w[i,k,j,l] <= x[i,k])
+					mdl.addConstraint(w[i,k,j,l] <= x[j,l])
+					mdl.addConstraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+					mdl.addConstraint(w[i,k,j,l] >= 0)
+
+	#compute quadratic values contirbution to obj
+	quadratic_values = 0
+	for i in range(m-1):
+		for j in range(i+1,m):
+			for k in range(n):
+				for l in range(n):
+					quadratic_values = quadratic_values + (c[i,k,j,l]*(w[i,k,j,l]))
+
+	linear_values = sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
+	mdl.setObjective(linear_values + quadratic_values, sense=xp.maximize)
+
+	#return model. no setup time for std
+	return [mdl, 0]
 
 def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, **kwargs):
 	start = timer()
@@ -722,60 +785,6 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	#return model
 	return [mdl,setup_time]
 
-def extended_linear_formulation(quad, **kwargs):
-	start = timer()
-	n = quad.n
-	c = quad.c
-	C = quad.C
-	a = quad.a
-	b = quad.b
-
-	#create model and add variables
-	m = xp.problem(name='extended_linear_formulation')
-	x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
-	z = np.array([[[xp.var(vartype=xp.continuous, lb=-xp.infinity) for i in range(n)] for j in range(n)] for k in range(n)])
-	m.addVariable(x,z)
-
-	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
-		#add capacity constraint(s)
-		for k in range(quad.m):
-			m.addConstraint(xp.Sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-
-	#k_item constraint if necessary (if KQKP or HSP)
-	if quad.num_items > 0:
-		m.addConstraint(xp.Sum(x[i] for i in range(n)) == quad.num_items)
-
-	#add auxiliary constraints
-	for i in range(n):
-		for j in range(i+1,n):
-			m.addConstraint(z[i,i,j]+z[j,i,j] <= 1)
-			if C[i,j] < 0:
-				m.addConstraint(x[i] + z[i,i,j] <= 1)
-				m.addConstraint(x[j] + z[j,i,j] <= 1)
-			elif C[i,j] > 0:
-				m.addConstraint(x[i] + z[i,i,j] + z[j,i,j] >= 1)
-				m.addConstraint(x[j] + z[i,i,j] + z[j,i,j] >= 1)
-
-	#compute quadratic values contirbution to obj
-	constant = 0
-	quadratic_values = 0
-	for i in range(n):
-		for j in range(i+1,n):
-			constant = constant + C[i,j]
-			quadratic_values = quadratic_values + (C[i,j]*(z[i,i,j]+z[j,i,j]))
-	#set objective function
-	if type(quad)==HSP:
-		#HSP doesn't habe any linear terms
-		m.setObjective(constant-quadratic_values, sense=xp.maximize)
-	else:
-		linear_values = xp.Sum(x[i]*c[i] for i in range(n))
-		m.setObjective(linear_values + constant - quadratic_values, sense=xp.maximize)
-
-	end = timer()
-	setup_time = end-start
-	#return model + setup time
-	return [m, setup_time]
-
 def qsap_elf(qsap, **kwargs):
 	start = timer()
 	n = qsap.n
@@ -819,119 +828,6 @@ def qsap_elf(qsap, **kwargs):
 	setup_time = end-start
 	#return model + setup time
 	return [mdl, setup_time]
-
-def ss_linear_formulation(quad, **kwargs):
-	"""
-	Sherali-Smith Linear Formulation
-	"""
-	start = timer()
-	n = quad.n
-	c = quad.c
-	C = quad.C
-	a = quad.a
-	b = quad.b
-
-	#create model and add variables
-	m = xp.problem(name='ss_linear_formulation')
-	x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
-	s = np.array([xp.var(vartype=xp.continuous) for i in range(n)])
-	y = np.array([xp.var(vartype=xp.continuous) for i in range(n)])
-	m.addVariable(x,y,s)
-
-	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
-		#add capacity constraint(s)
-		for k in range(quad.m):
-			m.addConstraint(xp.Sum(x[i]*a[k][i] for i in range(n)) <= b[k])
-
-	#k_item constraint if necessary (if KQKP or HSP)
-	if quad.num_items > 0:
-		m.addConstraint(xp.Sum(x[i] for i in range(n)) == quad.num_items)
-
-	U = np.zeros(n)
-	L = np.zeros(n)
-	u_bound_m = xp.problem(name='upper_bound_model')
-	l_bound_m = xp.problem(name='lower_bound_model')
-	u_bound_m.setlogfile("xpress.log")
-	l_bound_m.setlogfile("xpress.log")
-	u_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
-	l_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
-	u_bound_m.addVariable(u_bound_x)
-	l_bound_m.addVariable(l_bound_x)
-	if type(quad) is Knapsack:
-		for k in range(quad.m):
-			#add capacity constraints
-			u_bound_m.addConstraint(xp.Sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
-			l_bound_m.addConstraint(xp.Sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
-	if quad.num_items > 0:
-		u_bound_m.addConstraint(xp.Sum(u_bound_x[i] for i in range(n)) == quad.num_items)
-		l_bound_m.addConstraint(xp.Sum(l_bound_x[i] for i in range(n)) == quad.num_items)
-	for i in range(n):
-		#for each col, solve model to find upper/lower bound
-		u_bound_m.setObjective(xp.Sum(C[i,j]*u_bound_x[j] for j in range(n)), sense=xp.maximize)
-		l_bound_m.setObjective(xp.Sum(C[i,j]*l_bound_x[j] for j in range(n)), sense=xp.minimize)
-		u_bound_m.solve()
-		l_bound_m.solve()
-		U[i] = u_bound_m.getObjVal()
-		L[i] = l_bound_m.getObjVal()
-
-	#add auxiliary constraints
-	for i in range(n):
-		m.addConstraint(sum(C[i,j]*x[j] for j in range(n))-s[i]-L[i]==y[i])
-		m.addConstraint(y[i] <= (U[i]-L[i])*(1-x[i]))
-		m.addConstraint(s[i] <= (U[i]-L[i])*x[i])
-		m.addConstraint(y[i] >= 0)
-		m.addConstraint(s[i] >= 0)
-
-	#set objective function
-	if type(quad)==HSP:
-		#HSP doesn't habe any linear terms
-		m.setObjective(sum(s[i]+x[i]*(L[i])for i in range(n)), sense=xp.maximize)
-	else:
-		m.setObjective(sum(s[i]+x[i]*(c[i]+L[i])for i in range(n)), sense=xp.maximize)
-
-	end = timer()
-	setup_time = end-start
-	#return model + setup time
-	return [m, setup_time]
-
-def qsap_standard(qsap, **kwargs):
-	n = qsap.n
-	m = qsap.m
-	e = qsap.e
-	c = qsap.c
-
-	#create model and add variables
-	mdl = xp.problem(name='qsap_standard_linearization')
-	x = np.array([[xp.var(vartype=xp.binary) for i in range(n)]for j in range(m)])
-	w = np.array([[[[xp.var(vartype=xp.continuous) for i in range(n)]for j in range(m)]
-						for k in range(n)]for l in range(m)])
-	mdl.addVariable(x,w)
-	mdl.addConstraint((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
-
-	#add auxiliary constraints
-	#TODO implement lhs here?
-	for i in range(m-1):
-		for k in range(n):
-			for j in range(i+1,m):
-				for l in range(n):
-					mdl.addConstraint(w[i,k,j,l] <= x[i,k])
-					mdl.addConstraint(w[i,k,j,l] <= x[j,l])
-					mdl.addConstraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
-					mdl.addConstraint(w[i,k,j,l] >= 0)
-
-	#compute quadratic values contirbution to obj
-	quadratic_values = 0
-	for i in range(m-1):
-		for j in range(i+1,m):
-			for k in range(n):
-				for l in range(n):
-					quadratic_values = quadratic_values + (c[i,k,j,l]*(w[i,k,j,l]))
-
-	linear_values = sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
-	mdl.setObjective(linear_values + quadratic_values, sense=xp.maximize)
-
-	#return model. no setup time for std
-	return [mdl, 0]
 
 def qsap_ss(qsap, **kwargs):
 	"""
@@ -989,3 +885,86 @@ def qsap_ss(qsap, **kwargs):
 	setup_time = end-start
 	#return model + setup time
 	return [mdl, setup_time]
+
+def no_linearization(quad, **kwargs):
+	start = timer()
+	n = quad.n
+	c = quad.c
+	m = xp.problem(name='no_linearization')
+	x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
+	m.addVariable(x)
+
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
+		for k in range(quad.m):
+			m.addConstraint(xp.Sum(x[i]*quad.a[k][i] for i in range(n)) <= quad.b[k])
+
+	#k_item constraint if necessary (if KQKP or HSP)
+	if quad.num_items > 0:
+		m.addConstraint(xp.Sum(x[i] for i in range(n)) == quad.num_items)
+
+	#compute quadratic values contirbution to obj
+	quadratic_values = 0
+	for i in range(n):
+		for j in range(i+1,n):
+			quadratic_values = quadratic_values + (x[i]*x[j]*quad.C[i,j])
+	#set objective function
+	linear_values = xp.Sum(x[i]*c[i] for i in range(n))
+	m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
+
+	end = timer()
+	setup_time = end-start
+	return [m, setup_time]
+
+def solve_model(m, solve_relax=True):
+	"""
+	Takes in an unsolved gurobi model of a MIP. Solves it as well as continuous
+	relaxation and returns a dictionary containing relevant solve details
+	"""
+	# turn off model output. otherwise prints bunch of info, clogs console
+	m.setlogfile("xpress.log")
+	time_limit = False
+	# start timer and solve model
+	m.controls.maxtime = 3600
+	start = timer()
+	m.solve()
+	end = timer()
+	if("optimal" not in str(m.getProbStatusString())):
+		print('time limit exceeded')
+		time_limit=True
+	solve_time = end-start
+	objective_value = m.getObjVal()
+
+
+	if solve_relax and not time_limit:
+		# relax and solve to get continuous relaxation and integrality_gap
+		#cols = []
+		#m.getcoltype(cols,0,m.attributes.cols-1)
+		#print(cols)
+		#cols = np.asarray(cols)
+		#bin_cols = [cols == 'B']
+		#print(bin_cols)
+		#m.chgcoltype(range(10),['C','C','C','C','C','C','C','C','C','C'])
+		vars = m.getVariable()
+		#TODO this is inneficient
+		for index,var in enumerate(vars):
+			if var.vartype == 1: #1 means binary
+				m.chgcoltype([index],['C'])
+
+		m.solve()
+		continuous_obj_value = m.getObjVal()
+		integrality_gap = ((continuous_obj_value-objective_value)/objective_value)*100
+	else:
+		continuous_obj_value = -1
+		integrality_gap = -1
+	# terminate model so not allocating resources
+	#m.close()
+
+
+	# create and return results dictionary
+	results = {"solve_time": solve_time,
+			   "objective_value": objective_value,
+			   "relaxed_solution": continuous_obj_value,
+			   "integrality_gap": integrality_gap,
+				"time_limit":time_limit}
+	return results

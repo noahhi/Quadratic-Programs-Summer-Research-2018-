@@ -27,3 +27,9 @@
 * default quadratic solvers (confirm this is worse than linearizations)
 * compare solver speeds (is cplex better for some things vs gurobi for others?)
 *
+
+# Observations
+* cplex seems to beat other solvers for large problems
+* glover tight bounts, 1st or 2nd sub seems best
+* glovers > ss >> std ~ elf
+* ut > symmetric?
