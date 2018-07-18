@@ -301,8 +301,8 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 		#create model and add variables
 		m = Model(name='RLT-1_linearization')
 		x = m.continuous_var_list(n,name='binary_var', lb=0, ub=1) #named binary_var so can easily switch for debug
-		w = m.continuous_var_matrix(keys1=n, keys2=n)
-		y = m.continuous_var_matrix(keys1=n, keys2=n)
+		w = m.continuous_var_matrix(keys1=n, keys2=n, lb=0, ub=1)
+		y = m.continuous_var_matrix(keys1=n, keys2=n, lb=0, ub=1)
 
 		if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
 			#add capacity constraint(s)
@@ -363,6 +363,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 	#model with rlt1, solve continuous relax and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
 	m.solve()
+	print(m.objective_value)
 	duals16 = np.zeros((n,n))
 	duals17 = np.zeros((n,n))
 	for i in range(n):
@@ -374,7 +375,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 				continue
 			con_name = 'con17'+str(i)+str(j)
 			duals17[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
-
+	#print(duals17)
 	D = np.zeros((n,n))
 	E = np.zeros((n,n))
 	#optimal split, found using dual vars from rlt1 continuous relaxation
@@ -384,13 +385,15 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 				continue
 			if i<j:
 				D[i,j] = C[i,j]-duals16[i,j]-duals17[i,j]
+				E[i,j] = -duals17[i,j]
 			if i>j:
 				D[i,j] = C[i,j]+duals16[j,i]-duals17[i,j]
-	E = -duals17
+				E[i,j] = -duals17[i,j]
+	#E = -duals17
 
 	#update linear values as well
 	for j in range(n):
-		c[j] = c[j] + sum(duals17[j,i] for i in range(n))
+		c[j] = c[j] + sum(duals17[j,i] for i in range(n) if i!=j)
 
 	#simple split (this works but is not optimal)
 	# for i in range(n):
@@ -426,7 +429,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
 			L1[j] = np.sum(col1[col1<0])
 			U2[j] = np.sum(col2[col2>0])
 			L2[j] = np.sum(col2[col2<0])
-
 	elif(bounds=="tight"):
 		u_bound_m1 = Model(name='upper_bound_model1')
 		l_bound_m1 = Model(name='lower_bound_model1')
@@ -927,9 +929,21 @@ def qsap_ss(qsap, **kwargs):
 	#return model + setup time
 	return [mdl, setup_time]
 
-# p = QSAP()
+# p = Knapsack()
+# p.reorder(flip_order=True, take_max=True)
+# m = glovers_linearization(p)[0]
+# print(solve_model(m))
+
+# p = UQP()
+# print(solve_model(glovers_linearization(p)[0]))
+# p.reorder(flip_order=True, take_max=False)
+# print(solve_model(glovers_linearization(p)[0]))
+
+# p = QSAP(n=3,m=4)
 # print(solve_model(qsap_glovers(p)[0]))
-# print(solve_model(qsap_standard(p)[0]))
-# p.reorder()
+# p.reorder(take_max=False, flip_order=False)
 # print(solve_model(qsap_glovers(p)[0]))
-# print(solve_model(qsap_standard(p)[0]))
+
+p = Knapsack(n=15)
+print(solve_model(glovers_linearization(p)[0]))
+print(solve_model(glovers_linearization_rlt(p)[0]))

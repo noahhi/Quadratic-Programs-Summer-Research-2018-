@@ -41,28 +41,37 @@ class Quadratic: #base class for all quadratic problem types
 			print('quadratic objective coeff vector C = \n' + str(self.C))
 		print("")
 
-	def reorder(self): #note this only works for nonnegative coefficients (ie. wont work for UQP atm)
+	def reorder(self, take_max=False, flip_order=False): #note this only works for nonnegative coefficients (ie. wont work for UQP atm)
 		C = self.C
 		n = self.n
-		value_matrix = np.absolute(np.copy(self.C))
+		value_matrix = (np.copy(self.C))
 		i_lower = np.tril_indices(self.n)
 		value_matrix[i_lower] = value_matrix.T[i_lower]
+		neg_mask = np.copy(value_matrix)
+		value_matrix = np.absolute(value_matrix)
 		col_sums, new_order = [], []
 		for i in range(self.n):
 			col_sums.append(sum(value_matrix[i]))
 		#TODO this is a bit ineffiecient
 		for i in range(self.n):
-			low_index=col_sums.index(min(col_sums))
+			if take_max:
+				low_index=col_sums.index(max(col_sums))
+				col_sums[low_index]=-sys.maxsize
+			else:
+				low_index=col_sums.index(min(col_sums))
+				col_sums[low_index]=sys.maxsize
 			new_order.append(low_index)
 			for j in range(self.n):
 				col_sums[j]-=value_matrix[low_index][j]
-			col_sums[low_index]=sys.maxsize
+
 		# for new_index,old_index in zip(new_order,range(self.n)):
 		# 	for j in range(old_index):
+		if flip_order:
+			new_order.reverse()
 
 		for i in range(n):
 			for j in range(i+1,n):
-				C[i,j] =  value_matrix[new_order[i],new_order[j]]
+				C[i,j] =  neg_mask[new_order[i],new_order[j]]
 		#TODO possible this could cause issues(make sure c is reordered correctly)
 		self.c = [self.c[i] for i in new_order]
 		if type(self) == Knapsack:
@@ -99,9 +108,14 @@ class Knapsack(Quadratic): #includes QKP, KQKP, QMKP
 			self.a = np.random.randint(low=1, high=101, size=(m, n))
 			#knapsack capacity(s)
 			for i in range(m):
-				#Note: upper bound used in org paper fpor kitem was: high=30*self.num_items
-				self.b.append(np.random.randint(low=50, high=np.sum(self.a[i])+1))
-
+				#find heaviest item. make sure cap constraint allows for taking it
+				amax = self.a[i].max()
+				#Note: upper bound used in org paper for kitem was: high=30*self.num_items
+				potential_cap_con = np.random.randint(low=50, high=np.sum(self.a[i])+1)
+				while potential_cap_con < amax:
+					print("had to come up with new capacity constraint")
+					potential_cap_con = np.random.randint(low=50, high=np.sum(self.a[i])+1)
+				self.b.append(potential_cap_con)
 
 		#item values
 		for i in range(n):
@@ -198,20 +212,23 @@ class QSAP: #quadratic semi assignment problem
 				for j in range(i+1,m):
 					for l in range(n):
 						self.c[i,k,j,l] = np.random.randint(-50,51)
-	def reorder(self):
+	def reorder(self, take_max=False, flip_order=False):
 		C = self.c
 		n = self.n
 		m = self.m
 		e = self.e
 		#generate value matrix. a symmetric copy of quadratic terms matrix (all positive)
 		value_matrix = np.zeros(shape=(m,n,m,n))
+		neg_mask = np.zeros(shape=(m,n,m,n))
 		for i in range(m-1):
 			for k in range(n):
 				for j in range(i+1,m):
 					for l in range(n):
-						value_matrix[i,k,j,l] = abs(C[i,k,j,l])
-						value_matrix[j,l,i,k] = abs(C[i,k,j,l])
-
+						val = C[i,k,j,l]
+						neg_mask[i,k,j,l] = val
+						neg_mask[j,l,i,k] = val
+						value_matrix[i,k,j,l] = abs(val)
+						value_matrix[j,l,i,k] = abs(val)
 
 		col_sums = np.zeros((m,n))
 		old_order = []
@@ -223,22 +240,39 @@ class QSAP: #quadratic semi assignment problem
 				#compute 'column' sums. (ie. sum of all j,l terms for an i,k pair)
 				col_sums[i,k] = sum(sum(value_matrix[i,k,j,l] for j in range(m))for l in range(n))
 
+
 		#find the minimum col_sum, and record its index as the next elem in our new order
 		for i in range(n*m):
 			minv = col_sums[0,0]
 			mindex = (0,0)
 			for (x,y), v in np.ndenumerate(col_sums):
-				if v < minv:
-					minv = v
-					mindex = (x,y)
+				if take_max:
+					if v > minv:
+						minv = v
+						mindex = (x,y)
+				else:
+					if v < minv:
+						minv = v
+						mindex = (x,y)
+			if take_max:
+				col_sums[mindex[0],mindex[1]]=-sys.maxsize #could use sys.maxsize
+			else:
+				col_sums[mindex[0],mindex[1]]=sys.maxsize #could use sys.maxsize
 			new_order.append(mindex)
-			map[old_order[i]] = mindex
+			#map[old_order[i]] = mindex
 			for i in range(m):
 				for k in range(n):
 					#update other terms according to paper
 					col_sums[i,k]-=value_matrix[i,k,mindex[0],mindex[1]]
 			#need to ignore/remove current mindex
-			col_sums[mindex[0],mindex[1]]=100000 #could use sys.maxsize
+
+
+		if flip_order:
+			new_order.reverse()
+
+		for i in range(n*m):
+			map[old_order[i]] = new_order[i]
+
 
 		#apply reordering to quadratic terms matrix
 		for i in range(m-1):
@@ -247,6 +281,17 @@ class QSAP: #quadratic semi assignment problem
 					for l in range(n):
 						(x1,y1) = map[(i,k)]
 						(x2,y2) = map[(j,l)]
-						C[i,k,j,l] =  value_matrix[x1,y1,x2,y2]
+						C[i,k,j,l] =  neg_mask[x1,y1,x2,y2]
+
 		#apply reordering to linear terms matrix
 		e = np.array([e[i,k] for (i,k) in new_order]).reshape(m,n)
+		self.e = e
+
+
+
+
+# p = QSAP(n=3,m=3)
+# print(p.c)
+# p.reorder()
+# print('\n\n')
+# print(p.c)
