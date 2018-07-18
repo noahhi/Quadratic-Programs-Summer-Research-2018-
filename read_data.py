@@ -5,9 +5,7 @@ import time
 import sys
 import os
 
-
 def write_report(df, save_loc):
-
     #time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
     #excel_filename = time_stamp+'-report.xlsx'
     #writer = pd.ExcelWriter("reports/"+excel_filename, engine='xlsxwriter')
@@ -68,13 +66,13 @@ def performance_profile(df, save_loc, variable, formulations):
     linestyles = ["solid", "dashed", "dotted", "dashdot"]
     for f in range(nf):
         xf = r[:,f]
-        print(xf)
-        plt.plot(xf,yf, drawstyle="steps", linestyle=linestyles[f])
+        #print(xf)
+        plt.plot(xf,yf, drawstyle="steps", linestyle=linestyles[f % len(linestyles)])
     plt.title("Performance Profile For {}".format(variable))
     plt.xlabel('Factor of Best Ratio')
     plt.ylabel('Probability')
     plt.legend([form for form in formulations])
-    plt.axis(xmin=1, xmax=10)
+    plt.axis(xmin=1) #can set xmax to zoom in/out
 
     plt.savefig(save_loc+"performance_profile")
     plt.show()
@@ -104,9 +102,9 @@ corresponding formulation options:
     glover_cons : ['original', 'sub1', 'sub2']
 """
 #analyze(df_name='test', new_folder_name='test', test_variable="solver", formulations=['cplex', 'gurobi', 'xpress'])
-analyze(df_name='testing', new_folder_name='test', test_variable="method", formulations=["std", "elf", "glover", "ss_linear_formulation"])
+#analyze(df_name='testing', new_folder_name='test', test_variable="method", formulations=["std", "elf", "glover", "ss_linear_formulation", "no_lin"])
 #analyze(df_name='test', new_folder_name='test', test_variable="method", formulations=["qsap_ss", "qsap_elf", "qsap_glover", "qsap_standard"])
-#analyze(df_name='uqp_std_cons', new_folder_name='uqp_std_cons', test_variable="options", formulations=[0, 1])
+analyze(df_name='testing', new_folder_name='test', test_variable="symmetric", formulations=[0, 1])
 #analyze(df_name='gloverbounds', new_folder_name='glover_bounds', test_variable="glover_bounds", formulations=['original', 'tight', 'tighter'])
 
 

@@ -857,7 +857,7 @@ def solve_model(model, solve_relax=True, **kwargs):
 	#use with block to automatically call m.end() when finished
 	with model as m:
 		time_limit = False
-		m.set_time_limit(3600)
+		m.set_time_limit(600)
 		start = timer()
 		m.solve()
 		end = timer()

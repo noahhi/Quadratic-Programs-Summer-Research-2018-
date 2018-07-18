@@ -212,7 +212,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	# return model
 	return [m, setup_time]
 
-def glovers_linearization_prlt(quad):
+def glovers_linearization_prlt(quad, **kwargs):
 	def prlt1_linearization(quad):  # only called from within reformulate_glover (make inner func?)
 		n = quad.n
 		c = quad.c
@@ -289,7 +289,7 @@ def glovers_linearization_prlt(quad):
 	return [new_m, setup_time]
 
 #TODO glovers_rlt currently works only for knapsack w/ original constraints
-def glovers_linearization_rlt(quad, bounds="tight", constraints="original"):
+def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kwargs):
 	def rlt1_linearization(quad):
 		n = quad.n
 		c = quad.c
@@ -871,7 +871,7 @@ def no_linearization(quad, **kwargs):
 	setup_time = end-start
 	return [m, setup_time]
 
-def solve_model(m, solve_relax=True):
+def solve_model(m, solve_relax=True, **kwargs):
 	"""
 	Takes in an unsolved gurobi model of a MIP. Solves it as well as continuous
 	relaxation and returns a dictionary containing relevant solve details
@@ -879,7 +879,7 @@ def solve_model(m, solve_relax=True):
 	# turn off model output. otherwise prints bunch of info, clogs console
 	#m.setParam('OutputFlag', 0)
 	time_limit = False
-	m.setParam('TimeLimit',3600)
+	m.setParam('TimeLimit',600)
 	# start timer and solve model
 	start = timer()
 	m.optimize()
