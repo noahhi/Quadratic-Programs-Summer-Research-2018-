@@ -1,14 +1,6 @@
-
-.c9/
 #ignore log files
-gurobi.log
 log/
-#ignore excel files
-reports/*
-dataframes/*
-*.lp
 *.log
-*.pkl
 
 # Created by https://www.gitignore.io/api/python
 

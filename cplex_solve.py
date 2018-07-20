@@ -86,7 +86,7 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	U0 = np.zeros(n)
 	L1 = np.zeros(n)
 	start = timer()
-	if(bounds=="original"):
+	if(bounds=="original" or type(quad)==UQP):
 		for j in range(n):
 			col = C[:, j]
 			pos_take_vals = col > 0
@@ -256,6 +256,7 @@ def glovers_linearization_prlt(quad, **kwargs):
 	start = timer()
 	m = prlt1_linearization(quad)
 	m.solve()
+	print(m.objective_value)
 
 	n = quad.n
 	C = quad.C
@@ -905,12 +906,12 @@ def solve_model(model, solve_relax=True, **kwargs):
 				"time_limit":time_limit}
 	return results
 
+p = Knapsack(n=45)
+print(solve_model(glovers_linearization_prlt(p)[0]))
+print(solve_model(glovers_linearization_rlt(p)[0]))
 
-# p = QSAP(n=3,m=4)
-# print(solve_model(qsap_glovers(p)[0]))
-# p.reorder(take_max=False, flip_order=False)
-# print(solve_model(qsap_glovers(p)[0]))
 
-# p = Knapsack(n=15)
-# print(solve_model(glovers_linearization(p)[0]))
-# print(solve_model(glovers_linearization_rlt(p)[0]))
+# p = QSAP(n=4,m=11)
+# print(solve_model(qsap_glovers(p, bounds="original")[0]))
+# print(solve_model(qsap_glovers(p, bounds="tight")[0]))
+#print(solve_model(qsap_glovers(p, bounds="tighter")[0]))

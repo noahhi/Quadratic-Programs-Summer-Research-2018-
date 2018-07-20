@@ -1,0 +1,1 @@
+Upper Triangular WAY better for QKP and UQP. BUT SYMMETRIC BETTER FOR HSP. No diff for QSAP or kqkp

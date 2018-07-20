@@ -77,18 +77,68 @@ def performance_profile(df, save_loc, variable, formulations):
     plt.savefig(save_loc+"performance_profile")
     plt.show()
 
-def analyze(df_name, new_folder_name, test_variable, formulations):
-    #read in dataframe
-    df = pd.read_pickle("dataframes/{}.pkl".format(df_name))
+def make_bar_graph(df, save_loc, variable, formulations):
+    data = {}
+    y = []
+    stds = []
+    x = []
+    for form in formulations:
+        x.append(form)
+        form_rows = df[df[variable]==form]
+        #chose from "instance_total_time", "instance_solve_time", "instance_setup_time", "instance_gap"
+        #TODO make sure getting total_time not just solve time. (usually we want total_time)
+        form_data = form_rows["instance_solve_time"].tolist()
+        #print(sum(form_data)) ---this is the total solve time for formulation
+        #plt.bar(form, sum(form_data)/len(form_data))
+        #plt.bar(form, sum(form_data), yerr=np.std(form_data))
+        #TODO how to handle nan values here?? currently ignoring them..
+        y.append(np.nanmean(form_data))
+        #stds.append(np.nanstd(form_data))
+    plt.bar(x,y, color=["C0","C1", "C2", "C3", "C4"], tick_label=formulations) #can set std with yerr=[]
+    plt.title("Solve Time Comparison for {}".format(variable))
+    plt.xlabel("Formulation")
+    plt.ylabel("Average Solve Time")
+    plt.legend([form for form in formulations])
+    plt.savefig(save_loc+"bar_graph") #format="pdf" to save as pdf (default is png)
+    plt.show()
 
+def analyze(df_name, new_folder_name, test_variable, formulations, specifications=None):
+    """
+    param df_name: name of dataframe from dataframes folder to load in
+    param new_folder_name: will create a new folder with this name containing new graphs and excel files
+    param test_variable: the variable to be analyzed. (can use any column name from dataframe) (ie. "solver", "glover_bounds", etc..)
+    param formulations: the set of options for that variable (ie. ["tight", "tighter", "original"] for "glover_bounds" as test_variable)
+    """
+    #read in dataframe from dataframes folder
+    df = pd.read_pickle("dataframes/{}.pkl".format(df_name))
+    #df = df[:-5]   #--use this to cut off (5) rows from end if uneven length
+    #df = df[df["density"]==50]
+
+    #Create a new data folder, while making sure to not overwrite existing data
     mypath = "data/{}/".format(new_folder_name)
     if new_folder_name=="test" or not os.path.isdir(mypath):
         if not new_folder_name=="test":
             os.makedirs(mypath)
+        #save a copy of the dataframe being analyzed
         df.to_pickle(mypath+'/dataframe.pkl')
-        #df = df[:-5]   #--use this to cut off (5) rows from end if uneven length
+        #generate an excel report
         write_report(df, save_loc=mypath)
-        performance_profile(df, save_loc=mypath, variable=test_variable, formulations=formulations)
+        #generate a performance profile graph
+        performance_profile(df, save_loc=mypath+"aggregate_", variable=test_variable, formulations=formulations)
+        #generate a bar graph showing solve times
+        make_bar_graph(df, save_loc=mypath+"aggregate_", variable=test_variable, formulations=formulations)
+
+
+        #specify which rows to consider if desired. (ie. can only look at data for "QKP"))
+        if specifications==None:
+            return
+        for key,values in specifications.items():
+            for value in values:
+                sub_df = df[df[key]==value]
+                #generate a performance profile graph
+                performance_profile(sub_df, save_loc=mypath+key+"_"+str(value)+"_", variable=test_variable, formulations=formulations)
+                #generate a bar graph showing solve times
+                make_bar_graph(sub_df, save_loc=mypath+key+"_"+str(value)+"_", variable=test_variable, formulations=formulations)
     else:
         raise Exception("Save path folder {} already exists. ".format(mypath))
 
@@ -101,11 +151,19 @@ corresponding formulation options:
     glover_bounds : ['original', 'tight', 'tighter']
     glover_cons : ['original', 'sub1', 'sub2']
 """
-#analyze(df_name='test', new_folder_name='test', test_variable="solver", formulations=['cplex', 'gurobi', 'xpress'])
-#analyze(df_name='testing', new_folder_name='test', test_variable="method", formulations=["std", "elf", "glover", "ss_linear_formulation", "no_lin"])
-#analyze(df_name='test', new_folder_name='test', test_variable="method", formulations=["qsap_ss", "qsap_elf", "qsap_glover", "qsap_standard"])
-analyze(df_name='testing', new_folder_name='test', test_variable="symmetric", formulations=[0, 1])
-#analyze(df_name='gloverbounds', new_folder_name='glover_bounds', test_variable="glover_bounds", formulations=['original', 'tight', 'tighter'])
+
+specs = {"density":[25,50,75,100], "type":["QKP", "KQKP", "HSP", "UQP", "QSAP"]}
+analyze(df_name='batch1', new_folder_name='test4', specifications=specs,
+            test_variable="symmetric", formulations=[0,1])
+
+
+
+
+
+
+
+
+
 
 
 #pre converted DF

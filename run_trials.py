@@ -122,8 +122,11 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 			#print instance solve info to log file
 			if(time_limit):
 				instance_solve_time = np.nan
+				instance_setup_time = np.nan
+				instance_total_time = np.nan
 				instance_int_gap = np.nan
 				f.write("TIME LIMIT REACHED\n")
+				print("TIME LIMIT REACHED")
 			f.write("Integer Solution: " + str(instance_obj_val)+"\n")
 			f.write("Continuous Solution: " + str(instance_relax)+"\n")
 			f.write("Integrality Gap: " + str(instance_int_gap)+"\n")
@@ -155,7 +158,7 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 		df = pd.DataFrame(data_)
 		df = df[["trial","solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
 					"density", "multiple", "instance_gap","instance_setup_time", "instance_solve_time", "instance_total_time", "instance_obj_val"]]  #reorder columns
-		df.to_pickle('dataframes/batch1.pkl')
+		df.to_pickle('dataframes/batch2.pkl')
 		#return results across trials
 		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":int_gap_sum/trials,
 					"avg_total_time":(setup_time_sum+solve_time_sum)/trials, "std_dev":np.std(instance_total_times),
@@ -184,9 +187,10 @@ if __name__=="__main__":
 	start = timer()
 	#this list of dictionaries will store all data
 	data = []
-	num_trials = 10
-	symmetry = (True, False)
-	options = (0,1)
+	num_trials = 8
+	symmetry = (False)
+	cons = ("sub1", "sub2")
+	bounds = ("original", "tight", "tighter")
 
 	qkp_set = ((25,70),(50,60),(75,50),(100,40))
 	multiples = (1,5,10)
@@ -194,53 +198,52 @@ if __name__=="__main__":
 	for density,size in qkp_set:
 		for sign in signs:
 			for mult in multiples:
-				for sym in symmetry:
-					for opt in options:
+				for con in cons:
+					for bound in bounds:
 						print("running-(size-{}, density-{}, type-{}, bound-{}, cons-{}, mixed_sign-{}, multiple-{}, symmetric-{})".format(
-	 						size,density,"QKP","tight",opt,sign,mult,sym))
-						run_trials(data_=data, trials=num_trials, solver="cplex", type="QKP",symmetric=sym, method="glover",
-							size=size,den=density, multiple=mult, options=opt, glover_bounds="tight", glover_cons="original", mixed_sign=sign)
+								size,density,"QKP","tight",0,sign,mult,False))
+						run_trials(data_=data, trials=num_trials, solver="cplex", type="QKP",symmetric=False, method="glover",
+							size=size,den=density, multiple=mult, options=0, glover_bounds=bound, glover_cons=con, mixed_sign=sign)
 
 
 	kqkp_set = ((25,70),(50,65),(75,60),(100,55))
 	signs = (True, False)
 	for density,size in kqkp_set:
 		for sign in signs:
-			for sym in symmetry:
-				for opt in options:
+			for con in cons:
+				for bound in bounds:
 					print("running-(size-{}, density-{}, type-{}, bound-{}, cons-{}, mixed_sign-{},symmetric-{})".format(
-	 					size,density,"KQKP","tight",opt,sign,sym))
-					run_trials(data_=data, trials=num_trials, solver="cplex", type="KQKP",symmetric=sym, method="glover",
-						size=size,den=density, multiple=1, options=opt, glover_bounds="tight", glover_cons="original", mixed_sign=sign)
+							size,density,"KQKP","tight",0,sign,False))
+					run_trials(data_=data, trials=num_trials, solver="cplex", type="KQKP",symmetric=False, method="glover",
+						size=size,den=density, multiple=1, options=0, glover_bounds=bound, glover_cons=con, mixed_sign=sign)
 
 
 	uqp_set = ((25,55),(50,50),(75,45),(100,40))
 	for density,size in uqp_set:
-		for sym in symmetry:
-			for opt in options:
-				print("running-(size-{}, density-{}, type-{}, bound-{}, cons-{},symmetric-{})".format(
-	 				size,density,"UQP","tight",opt,sym))
-				run_trials(data_=data, trials=num_trials, solver="cplex", type="UQP",symmetric=sym, method="glover",
-					size=size,den=density, multiple=1, options=opt, glover_bounds="tight", glover_cons="original")
+		for con in cons:
+			print("running-(size-{}, density-{}, type-{}, bound-{}, cons-{},symmetric-{})".format(
+					size,density,"UQP","tight",0,False))
+			run_trials(data_=data, trials=num_trials, solver="cplex", type="UQP",symmetric=False, method="glover",
+				size=size,den=density, multiple=1, options=0, glover_bounds="org", glover_cons=con)
 
 
 	hsp_set = ((25,45),(50,40),(75,35),(100,30))
 	for density,size in hsp_set:
-		for sym in symmetry:
-			for opt in options:
+		for con in cons:
+			for bound in bounds:
 				print("running-(size-{}, density-{}, type-{}, bound-{}, cons-{}, symmetric-{})".format(
-	 				size,density,"HSP","tight",opt,sym))
-				run_trials(data_=data, trials=num_trials, solver="cplex", type="HSP",symmetric=sym, method="glover",
-					size=size,den=density, multiple=1, options=opt, glover_bounds="tight", glover_cons="original")
+						size,density,"HSP","tight",0,False))
+				run_trials(data_=data, trials=num_trials, solver="cplex", type="HSP",symmetric=False, method="glover",
+					size=size,den=density, multiple=1, options=0, glover_bounds=bound, glover_cons=con)
 
 	qsap_set = ((12,6),(15,5),(18,4),(22,3))
 	for density,size in qsap_set:
-		for sym in symmetry:
-			for opt in options:
+		for con in cons:
+			for bound in bounds:
 				print("running-(size-{}, density-{}, type-{}, bound-{}, cons-{}, symmetric-{})".format(
-	 				size,density,"QSAP","tight",opt,sym))
-				run_trials(data_=data, trials=num_trials, solver="cplex", type="QSAP",symmetric=sym, method="qsap_glover",
-					size=size,den=density, multiple=1, options=opt, glover_bounds="tight", glover_cons="original")
+						size,density,"QSAP","tight",0,False))
+				run_trials(data_=data, trials=num_trials, solver="cplex", type="QSAP",symmetric=False, method="qsap_glover",
+					size=size,den=density, multiple=1, options=0, glover_bounds=bound, glover_cons=con)
 
 
 	end = timer()

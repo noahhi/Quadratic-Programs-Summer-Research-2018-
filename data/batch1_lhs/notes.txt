@@ -1,0 +1,1 @@
+Not including lhs constraints uniformally better across problem type (never a huge difference either way tho)
