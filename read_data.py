@@ -139,7 +139,7 @@ def make_line_graph(dfs, save_loc, variable, formulations):
 def analyze(df_name, new_folder_name, test_variable, formulations, specifications=None):
     """
     Generates a suite of performance profiles, graphs, and excel spreadsheets for analysis of a dataset. This is the only
-    method in this module which needs to be called 
+    method in this module which needs to be called
 
     param df_name: name of dataframe from dataframes folder to load in
     param new_folder_name: will create a new folder with this name containing new graphs and excel files
@@ -217,6 +217,11 @@ def helpful_snippets():
     plt.scatter(x,y)
     plt.show()
 
+    #FOR BATCH FILE 
+    if(len(sys.argv)==5): #batch file will go through here
+    run_trials(trials=5,type=sys.argv[1],method=sys.argv[2],den=int(sys.argv[3]),size=int(sys.argv[4]))
+
+
 """
 variable options: 'solver', 'method', 'glover_bounds', 'options' (ie. any column headers from report)
 corresponding formulation options:
@@ -226,9 +231,9 @@ corresponding formulation options:
     glover_cons : ['original', 'sub1', 'sub2']
 """
 
-# specs = {"density":[25,50,75,100], "type":["QKP", "KQKP", "HSP"]}
-# analyze(df_name='batch3_reorder_smaller', new_folder_name='testing', specifications=specs,
-#    test_variable="options", formulations=[0,1,2,3,4])
+specs = {"density":[25,50,75,100], "type":["QKP", "KQKP", "HSP"]}
+analyze(df_name='batch3_reorder_smaller', new_folder_name='testing', specifications=specs,
+   test_variable="options", formulations=[0,1,2,3,4])
 
 df = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_smaller"))
 df2 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder"))

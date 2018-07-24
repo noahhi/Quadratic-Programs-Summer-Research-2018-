@@ -6,10 +6,8 @@ import sys
 import time
 import pandas as pd
 from timeit import default_timer as timer
-import time
 
-#TODO change reorder default to false
-def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=False,
+def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
 			method="std",size=5,multiple=1,den=100, options=0,glover_bounds="tight", glover_cons="original",mixed_sign=False):
 	"""
 	Runs the same problem type thru given solver with given method repeatedly to get
@@ -36,7 +34,7 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=
 		f.write(seperator+"\n\n")
 
 		for i in range(trials):
-			time_stamp = time.strftime("%H_%M")
+			#time_stamp = time.strftime("%H_%M")
 			#print("starting trial number {:2} at {}".format(i,time_stamp))
 			#print("starting at {}".format(time_stamp))
 			f.write("Iteration "+str(i+1)+"\n")
@@ -103,14 +101,8 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=
 					raise Exception(str(method_) + " is not a valid method type")
 
 			cur_method = get_method(method)
-			#try:
-			#TODO change lhs_cons back to "options"
-			m = cur_method(quad, bounds=glover_bounds, constraints=glover_cons, lhs_constraints=False, use_diagonal=False)
-			#except:
-			# f.write("TRIAL FAILED - FAILURE DURING MODELING\n")
-			# f.write("=============================================\n")
-			# print("TRIAL FAILED - FAILURE DURING MODELING")
-			#try:
+			m = cur_method(quad, bounds=glover_bounds, constraints=glover_cons, lhs_constraints=options, use_diagonal=False)
+
 			if method=="no_lin":
 				results = cur_solver.solve_model(m[0], solve_relax=False)
 			else:
@@ -118,8 +110,10 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=
 
 			#retrieve info from solving instance
 			if 'ss' in method or (method=='glover' and (glover_bounds=="tight" or glover_bounds=="tighter")):
+				#only care about setup times for sherali-smith and glovers (time to compute bounds)
 				instance_setup_time = m[1]
 			else:
+				#otherwise setup time is inconsequential
 				instance_setup_time = 0
 			instance_solve_time = results.get("solve_time")
 			instance_obj_val = results.get("objective_value")
@@ -129,6 +123,7 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=
 			instance_total_time = instance_setup_time + instance_solve_time
 			#print instance solve info to log file
 			if(time_limit):
+				#if problem didn't solve within time limit, enter solve time as NaN
 				instance_solve_time = np.nan
 				instance_setup_time = np.nan
 				instance_total_time = np.nan
@@ -150,22 +145,19 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=
 			obj_sum += instance_obj_val
 			int_gap_sum += instance_int_gap
 			print("trial number {:2} took {:7.2f} seconds to solve".format(i,instance_total_time))
-			#except:
-			#trials-=1
-			#f.write("TRIAL FAILED - FAILED TO SOLVE MODEL\n")
-			#f.write("=============================================\n")
-			#print("TRIAL FAILED - FAILED TO SOLVE MODEL")
+
 			results = {"trial":i, "solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "instance_gap":instance_int_gap,
 					"instance_total_time":instance_total_time, "instance_obj_val":instance_obj_val, "symmetric": symmetric,
 					 "instance_setup_time": instance_setup_time,"instance_solve_time": instance_solve_time, "glover_bounds": glover_bounds,
-					  "mixed_sign": mixed_sign, "reorder":reorder, "multiple":multiple, "glover_cons":glover_cons, "id":filename}
-					  #TODO make id auto not include whatever variable we are looking at.
+					  "mixed_sign": mixed_sign, "reorder":reorder, "multiple":multiple, "glover_cons":glover_cons}
 			data_.append(results)
 			#TODO this list is going to get huge....
 
 		df = pd.DataFrame(data_)
+		#reorder columns since dict is ordered randomly by default
 		df = df[["trial","solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
-					"density", "multiple", "instance_gap","instance_setup_time", "instance_solve_time", "instance_total_time", "instance_obj_val"]]  #reorder columns
+					"density", "multiple", "instance_gap","instance_setup_time", "instance_solve_time", "instance_total_time", "instance_obj_val"]]
+		#save the dataframe in pickle format 
 		df.to_pickle('dataframes/batch3_reorder_bigger.pkl')
 		#return results across trials
 		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":int_gap_sum/trials,
@@ -257,13 +249,6 @@ if __name__=="__main__":
 
 	end = timer()
 	print("\ntook {:.3} seconds to run all trials".format(end-start))
-
-
-
-# FOR BATCH FILE
-# if(len(sys.argv)==5): #batch file will go through here
-# run_trials(trials=5,type=sys.argv[1],method=sys.argv[2],den=int(sys.argv[3]),size=int(sys.argv[4]))
-
 
 	# num_trials = 5
 	# sizes = [80,90,100,110]
