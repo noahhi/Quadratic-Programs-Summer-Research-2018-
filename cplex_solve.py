@@ -53,7 +53,7 @@ def standard_linearization(quad, lhs_constraints=True, **kwargs):
 	#return model. no setup time for std
 	return [m, 0]
 
-def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False, **kwargs):
+def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False, solve_continuous=False, **kwargs):
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -68,7 +68,10 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 
 	#create model and add variables
 	m = Model(name='glovers_linearization_'+bounds+'_'+constraints)
-	x = m.binary_var_list(n, name="binary_var")
+	if solve_continuous:
+		x = m.binary_var_list(n, name="binary_var")
+	else:
+		x = m.binary_var_list(n, name="binary_var")
 
 	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
 		#add capacity constraint(s)
@@ -256,7 +259,7 @@ def glovers_linearization_prlt(quad, **kwargs):
 	start = timer()
 	m = prlt1_linearization(quad)
 	m.solve()
-	print(m.objective_value)
+	#print(m.objective_value)
 
 	n = quad.n
 	C = quad.C
@@ -319,6 +322,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 				#con 14
 				m.add_constraint(m.sum(a[k][i]*y[i,j] for i in range(n) if i!=j)<=b[k]*(1-x[j]))
 
+		#TODO switching order of i,j here changes solution??
 		for j in range(n):
 			for i in range(n):
 				if(i==j):
@@ -354,7 +358,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 	#model with rlt1, solve continuous relax and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
 	m.solve()
-	print(m.objective_value)
+	#print(m.objective_value)
 	duals16 = np.zeros((n,n))
 	duals17 = np.zeros((n,n))
 	for i in range(n):
@@ -366,7 +370,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 				continue
 			con_name = 'con17'+str(i)+str(j)
 			duals17[i][j]=(m.dual_values(m.get_constraint_by_name(con_name)))
-	#print(duals17)
+	#print(duals16)
 	D = np.zeros((n,n))
 	E = np.zeros((n,n))
 	#optimal split, found using dual vars from rlt1 continuous relaxation
@@ -906,9 +910,16 @@ def solve_model(model, solve_relax=True, **kwargs):
 				"time_limit":time_limit}
 	return results
 
-p = Knapsack(n=45)
-print(solve_model(glovers_linearization_prlt(p)[0]))
-print(solve_model(glovers_linearization_rlt(p)[0]))
+# p = Knapsack(n=8)
+# p.reorder_refined(k=2)
+# m = glovers_linearization(p)[0]
+# print(solve_model(m))
+
+# print(m.solution)
+
+# p = Knapsack(n=45)
+# print(solve_model(glovers_linearization_prlt(p)[0]))
+# print(solve_model(glovers_linearization_rlt(p)[0]))
 
 
 # p = QSAP(n=4,m=11)

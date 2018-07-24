@@ -253,9 +253,9 @@ def glovers_linearization_prlt(quad, **kwargs):
 				if(i == j):
 					continue
 				quadratic_values = quadratic_values + (C[i, j]*w[i, j])
-
-		m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
 		linear_values = quicksum(x[j]*c[j] for j in range(n))
+		m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
+
 
 		# return model
 		return m
@@ -342,9 +342,9 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 				if(i == j):
 					continue
 				quadratic_values = quadratic_values + (C[i, j]*w[i, j])
-
-		m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
 		linear_values = quicksum(x[j]*c[j] for j in range(n))
+		m.setObjective(linear_values + quadratic_values, GRB.MAXIMIZE)
+
 
 		# return model
 		return m
@@ -359,7 +359,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 	# model with continuous relaxed rlt1 and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
 	m.optimize()
-	#print(m.objVal)     #this should be continuous relax solution to glover_ext.
+	print(m.objVal)     #this should be continuous relax solution to glover_ext.
 	# retrieve dual variables
 	duals16 = np.zeros((n, n))
 	duals17 = np.zeros((n, n))
@@ -372,7 +372,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 				continue
 			con_name = 'con17'+str(i)+str(j)
 			duals17[i][j] = (m.getConstrByName(con_name).getAttr(GRB.attr.Pi))
-
+	print(duals16)
 	D = np.zeros((n, n))
 	E = np.zeros((n, n))
 	# optimal split, found using dual vars from rlt1 continuous relaxation
@@ -388,7 +388,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 
 	# update linear values as well
 	for j in range(n):
-		c[j] = c[j] + quicksum(duals17[j, i] for i in range(n))
+		c[j] = c[j] + sum(duals17[j, i] for i in range(n) if i!=j)
 
 	# simple split (this works but is not optimal)
 	# for i in range(n):
@@ -914,3 +914,7 @@ def solve_model(m, solve_relax=True, **kwargs):
 			   "integrality_gap": integrality_gap,
 				"time_limit":time_limit}
 	return results
+
+# p = Knapsack(n=45)
+# print(solve_model(glovers_linearization_prlt(p)[0]))
+# print(solve_model(glovers_linearization_rlt(p)[0]))

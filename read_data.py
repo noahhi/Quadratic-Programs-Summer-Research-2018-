@@ -6,35 +6,42 @@ import sys
 import os
 
 def write_report(df, save_loc):
-    #time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
-    #excel_filename = time_stamp+'-report.xlsx'
-    #writer = pd.ExcelWriter("reports/"+excel_filename, engine='xlsxwriter')
+    """
+    Generates an excel spreadsheet containing all info from a given dataframe.
 
-    #save dataframe to excel file
+    param df: the dataframe to be converted
+    param save_loc: location of the folder in which the excel file will be saved
+    """
+
     writer = pd.ExcelWriter(save_loc+"report.xlsx", engine='xlsxwriter')
     df.to_excel(writer, index=False, sheet_name='Sheet1')
+
+    #custom color coding makes good and bad solve times stick out
     workbook = writer.book
     worksheet = writer.sheets['Sheet1']
-    worksheet.conditional_format('P2:P1000',{'type':'3_color_scale', 'min_color':'green', 'max_color':'red'})
-    writer.save()
+    worksheet.conditional_format('P2:P5000',{'type':'3_color_scale', 'min_color':'green', 'max_color':'red'})
 
-    #open the excel file for viewing
-    #os.chdir("reports")
-    #os.system(excel_filename)
+    writer.save()
 
 def performance_profile(df, save_loc, variable, formulations):
     """
-    convert run_trials report into form for performnace profile generation
+    Creates a performance profile graph
+
+    param df:
+    param save_loc:
+    param variable: The variable being looked at (ie. "glover_bounds")
+    param formulations: list of options for given variable (ie. ["original", "tight", "tighter"])
     """
+    #create sub-dataframe containing a column for each formulation, with rows for each solve time
     data = {}
     for form in formulations:
         form_rows = df[df[variable]==form]
         #chose from "instance_total_time", "instance_solve_time", "instance_setup_time", "instance_gap"
-        form_data = form_rows["instance_solve_time"].tolist()
+        form_data = form_rows["instance_total_time"].tolist()
         data[form] = form_data
     df = pd.DataFrame(data)
 
-    #save converted report as excel file
+    #save converted report as excel file called "perf_profile_report"
     writer = pd.ExcelWriter(save_loc+"perf_profile_report.xlsx", engine='xlsxwriter')
     df.to_excel(writer, index=False, sheet_name='Sheet1')
     writer.save()
@@ -66,51 +73,87 @@ def performance_profile(df, save_loc, variable, formulations):
     linestyles = ["solid", "dashed", "dotted", "dashdot"]
     for f in range(nf):
         xf = r[:,f]
-        #print(xf)
         plt.plot(xf,yf, drawstyle="steps", linestyle=linestyles[f % len(linestyles)])
     plt.title("Performance Profile For {}".format(variable))
     plt.xlabel('Factor of Best Ratio')
     plt.ylabel('Probability')
     plt.legend([form for form in formulations])
-    plt.axis(xmin=1) #can set xmax to zoom in/out
 
-    plt.savefig(save_loc+"performance_profile")
-    plt.show()
+    plt.axis(xmin=1, xmax=5) #can set xmax to zoom in/out #TODO make xmax a variable. or base automatically on ratio?
+
+    plt.savefig(save_loc+"performance_profile_"+variable)
+    plt.close()
 
 def make_bar_graph(df, save_loc, variable, formulations):
-    data = {}
-    y = []
-    stds = []
-    x = []
+    """
+    Creates a bar graph showing average solve times for each formulation. good complement to performance profile
+    """
     for form in formulations:
-        x.append(form)
+        #retrieve times for formulation
         form_rows = df[df[variable]==form]
-        #chose from "instance_total_time", "instance_solve_time", "instance_setup_time", "instance_gap"
-        #TODO make sure getting total_time not just solve time. (usually we want total_time)
-        form_data = form_rows["instance_solve_time"].tolist()
-        #print(sum(form_data)) ---this is the total solve time for formulation
-        #plt.bar(form, sum(form_data)/len(form_data))
-        #plt.bar(form, sum(form_data), yerr=np.std(form_data))
-        #TODO how to handle nan values here?? currently ignoring them..
-        y.append(np.nanmean(form_data))
-        #stds.append(np.nanstd(form_data))
-    plt.bar(x,y, color=["C0","C1", "C2", "C3", "C4"], tick_label=formulations) #can set std with yerr=[]
+        form_data = form_rows["instance_total_time"].tolist()
+
+        #plot formulation's average solve time
+        bar = plt.bar(form, np.nanmean(form_data))[0]
+
+        #count how many solvetimes are NaN (ie. how many didn't solve within time limit), and mark this on graph
+        num_nans = (str(np.isnan(form_data).sum())+" tl")
+        height = bar.get_height()
+        plt.text(bar.get_x()+bar.get_width()/2, height, num_nans, ha='center', va='bottom')
+
     plt.title("Solve Time Comparison for {}".format(variable))
     plt.xlabel("Formulation")
     plt.ylabel("Average Solve Time")
     plt.legend([form for form in formulations])
-    plt.savefig(save_loc+"bar_graph") #format="pdf" to save as pdf (default is png)
+    plt.savefig(save_loc+"bar_graph_"+variable) #format="pdf" to save as pdf (default is png)
+    plt.close()
+
+def make_line_graph(dfs, save_loc, variable, formulations):
+    """
+    Creates a line graph showing average solve times for each formulation across problem size. good complement to performance profile
+    """
+    for form in formulations:
+        avg_times = []
+        num_nans = []
+        for df in dfs:
+            #retrieve times for formulation
+            form_rows = df[df[variable]==form]
+            form_rows = form_rows[form_rows["type"]!="HSP"]
+            form_data = form_rows["instance_total_time"].tolist()
+            avg_times.append(np.nanmean(form_data))
+            num_nans.append(np.isnan(form_data).sum())
+        plt.plot(range(len(dfs)), avg_times, label=str(form)+" : "+str(sum(num_nans))+" time limit")
+    plt.xticks(np.arange(len(dfs)),['small','medium','big'])
+    plt.title("Solve Time Comparison for {}".format(variable))
+    plt.xlabel("Sizes")
+    plt.ylabel("Average Solve Time")
+    plt.legend()
     plt.show()
+    # unique_sizes = form_rows["size"].unique()
+    #         print(unique_sizes)
+    #         for size in unique_sizes:
+    #             size_data = form_rows[form_rows["size"]==size]
+    #             size_time = size_data["instance_total_time"].tolist()
+    #             avg_times.append(np.nanmean(size_time))
 
 def analyze(df_name, new_folder_name, test_variable, formulations, specifications=None):
     """
+    Generates a suite of performance profiles, graphs, and excel spreadsheets for analysis of a dataset. This is the only
+    method in this module which needs to be called 
+
     param df_name: name of dataframe from dataframes folder to load in
     param new_folder_name: will create a new folder with this name containing new graphs and excel files
     param test_variable: the variable to be analyzed. (can use any column name from dataframe) (ie. "solver", "glover_bounds", etc..)
     param formulations: the set of options for that variable (ie. ["tight", "tighter", "original"] for "glover_bounds" as test_variable)
+    param specifications:
     """
     #read in dataframe from dataframes folder
     df = pd.read_pickle("dataframes/{}.pkl".format(df_name))
+
+    #uncomment this to replace values that should be NaN
+    mask = df["instance_total_time"] > 600 #~where 600 was timelimit
+    df.loc[mask, "instance_total_time"] = np.nan
+
     #df = df[:-5]   #--use this to cut off (5) rows from end if uneven length
     #df = df[df["density"]==50]
 
@@ -119,29 +162,60 @@ def analyze(df_name, new_folder_name, test_variable, formulations, specification
     if new_folder_name=="test" or not os.path.isdir(mypath):
         if not new_folder_name=="test":
             os.makedirs(mypath)
+        os.makedirs(mypath+"/aggregate/")
         #save a copy of the dataframe being analyzed
-        df.to_pickle(mypath+'/dataframe.pkl')
+        df.to_pickle(mypath+'/aggregate/dataframe.pkl')
         #generate an excel report
-        write_report(df, save_loc=mypath)
-        #generate a performance profile graph
-        performance_profile(df, save_loc=mypath+"aggregate_", variable=test_variable, formulations=formulations)
-        #generate a bar graph showing solve times
-        make_bar_graph(df, save_loc=mypath+"aggregate_", variable=test_variable, formulations=formulations)
+        write_report(df, save_loc=mypath+"/aggregate/")
+        #generate a performance profile graph for the aggregated data
+        performance_profile(df, save_loc=mypath+"/aggregate/aggregate_", variable=test_variable, formulations=formulations)
+        #generate a bar graph showing solve times for the aggregated data
+        make_bar_graph(df, save_loc=mypath+"/aggregate/aggregate_", variable=test_variable, formulations=formulations)
 
-
-        #specify which rows to consider if desired. (ie. can only look at data for "QKP"))
         if specifications==None:
             return
+        #create graphs for subsets of data as desired (specified in specificaitons)
         for key,values in specifications.items():
+            os.makedirs(mypath+"/by_"+key+"/")
             for value in values:
                 sub_df = df[df[key]==value]
                 #generate a performance profile graph
-                performance_profile(sub_df, save_loc=mypath+key+"_"+str(value)+"_", variable=test_variable, formulations=formulations)
+                performance_profile(sub_df, save_loc=mypath+"/by_"+key+"/"+key+"_"+str(value)+"_", variable=test_variable, formulations=formulations)
                 #generate a bar graph showing solve times
-                make_bar_graph(sub_df, save_loc=mypath+key+"_"+str(value)+"_", variable=test_variable, formulations=formulations)
+                make_bar_graph(sub_df, save_loc=mypath+"/by_"+key+"/"+key+"_"+str(value)+"_", variable=test_variable, formulations=formulations)
     else:
         raise Exception("Save path folder {} already exists. ".format(mypath))
 
+    #open up new data folder for viewing
+    os.chdir(mypath)
+    os.system("start .")
+
+def helpful_snippets():
+    """
+    Do not call this function. Simply contains potentially useful code snippets
+    """
+    #read in 2 dataframes and combine them into one
+    df1 = pd.read_pickle("dataframes/{}.pkl".format("batch2_original_cons"))
+    df2 = pd.read_pickle("dataframes/{}.pkl".format("batch2"))
+    df = df2.append(df1)
+    df.to_pickle('dataframes/batch2_combined.pkl')
+
+    #~~if you want the time saved in a filename
+    time_stamp = time.strftime("%Y_%m_%d-%H_%M_%S")
+
+    #~~to automatically open an excel file for viewing
+    os.chdir("reports")
+    os.system(excel_filename)
+
+    #read in a dataframe from an excel file. choose desired rows and columns and create a simple graph
+    data=pd.read_excel(open("C:/Users/huntisan/Desktop/summer2018/std_glove_data.xlsx", "rb"))
+    relevant_data = data.loc[:,["method", "size", "avg_solve_time"]]
+    big_sizes = relevant_data.loc[:, "size"] > 90
+    big_sizes = relevant_data[big_sizes]
+    x = big_sizes.loc[:,"size"]
+    y = big_sizes.loc[:,"avg_solve_time"]
+    plt.scatter(x,y)
+    plt.show()
 
 """
 variable options: 'solver', 'method', 'glover_bounds', 'options' (ie. any column headers from report)
@@ -152,79 +226,11 @@ corresponding formulation options:
     glover_cons : ['original', 'sub1', 'sub2']
 """
 
-specs = {"density":[25,50,75,100], "type":["QKP", "KQKP", "HSP", "UQP", "QSAP"]}
-analyze(df_name='batch1', new_folder_name='test4', specifications=specs,
-            test_variable="symmetric", formulations=[0,1])
+# specs = {"density":[25,50,75,100], "type":["QKP", "KQKP", "HSP"]}
+# analyze(df_name='batch3_reorder_smaller', new_folder_name='testing', specifications=specs,
+#    test_variable="options", formulations=[0,1,2,3,4])
 
-
-
-
-
-
-
-
-
-
-
-#pre converted DF
-# #get number of rows and number of problems
-# shape = df.shape
-# n = shape[0]
-# p = int(n/2)
-#
-# #retrieve desired rows using boolean/mask indexing
-# all4cons = df[df["options"]==0]
-# all4con_times = all4cons["instance_solve_time"]
-# signdep = df[df["options"]==1]
-# signdep_times = signdep["instance_solve_time"]
-#
-# #compute min times for each problem
-# mintimes = np.zeros(p)
-# for i, times in enumerate(zip(all4con_times, signdep_times)):
-#     mintimes[i] = min(times[0], times[1])
-#
-# #compute performance ratios
-# r4 = np.zeros(p)
-# for i,t in enumerate(all4con_times):
-#     r4[i] = t/mintimes[i]
-# r2 = np.zeros(p)
-# for i,t in enumerate(signdep_times):
-#     r2[i] = t/mintimes[i]
-#
-# #compute rmax, and replace nan values with 2*rmax
-# rmax = 2*max(np.nanmax(r2),np.nanmax(r4))
-# r4[np.isnan(r4)] = rmax*2
-# r2[np.isnan(r2)] = rmax*2
-#
-# #sort
-# r4 = np.sort(r4)
-# r2 = np.sort(r2)
-
-# org_bounds = df[df["glover_bounds"]=="original"]
-# tight_bounds = df[df["glover_bounds"]=="tight"]
-#
-# org_bounds_times = org_bounds["avg_total_time"]
-# sorted_org = org_bounds_times.sort_values()
-# tight_bounds_times = tight_bounds["avg_solve_time"]
-# sorted_tight = tight_bounds_times.sort_values()
-#
-# option0 = df[df["options"]==0]
-# option1 = df[df["options"]==1]
-# option2 = df[df["options"]==2]
-# option3 = df[df["options"]==3]
-# x = ['option0', 'option1', 'option2', 'option3']
-#
-# plt.plot(sorted_org.values)
-# plt.plot(sorted_tight.values)
-# plt.show()
-
-# data=pd.read_excel(open("C:/Users/huntisan/Desktop/summer2018/std_glove_data.xlsx", "rb"))
-# relevant_data = data.loc[:,["method", "size", "avg_solve_time"]]
-# big_sizes = relevant_data.loc[:, "size"] > 90
-# big_sizes = relevant_data[big_sizes]
-# print(big_sizes)
-#
-# x = big_sizes.loc[:,"size"]
-# y = big_sizes.loc[:,"avg_solve_time"]
-# plt.scatter(x,y)
-# plt.show()
+df = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_smaller"))
+df2 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder"))
+df3 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_bigger"))
+make_line_graph([df,df2,df3],save_loc="",variable="options",formulations=[0,1,2,3,4])
