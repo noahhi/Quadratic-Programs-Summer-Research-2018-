@@ -5,6 +5,7 @@ import time
 import sys
 import os
 
+
 def write_report(df, save_loc):
     """
     Generates an excel spreadsheet containing all info from a given dataframe.
@@ -129,12 +130,32 @@ def make_line_graph(dfs, save_loc, variable, formulations):
     plt.ylabel("Average Solve Time")
     plt.legend()
     plt.show()
-    # unique_sizes = form_rows["size"].unique()
-    #         print(unique_sizes)
-    #         for size in unique_sizes:
-    #             size_data = form_rows[form_rows["size"]==size]
-    #             size_time = size_data["instance_total_time"].tolist()
-    #             avg_times.append(np.nanmean(size_time))
+
+def make_line_graph(dfs, save_loc, variable, formulations):
+    """
+    Creates a line graph showing average solve times for each formulation across problem size. good complement to performance profile
+    """
+    for form in formulations:
+        avg_times = []
+        labels = []
+        for df in dfs:
+            #retrieve times for formulation
+            form_rows = df[df[variable]==form]
+            form_rows = form_rows[form_rows["type"]=="QKP"]
+            unique_sizes = form_rows["size"].unique()
+            unique_sizes.sort()
+            for size in unique_sizes:
+                corresponding_density = form_rows[form_rows["size"]==size]["density"].unique()[0]
+                labels.append((size,corresponding_density))
+                size_data = form_rows[form_rows["size"]==size]
+                size_time = size_data["instance_total_time"].tolist()
+                avg_times.append(np.nanmean(size_time))
+        plt.plot(range(4), avg_times)
+    plt.xticks(np.arange(4),labels)
+    plt.title("Solve Time Comparison for {}".format(variable))
+    plt.xlabel("(Size,Density)")
+    plt.ylabel("Average Solve Time (s)")
+    plt.show()
 
 def analyze(df_name, new_folder_name, test_variable, formulations, specifications=None):
     """
@@ -217,9 +238,9 @@ def helpful_snippets():
     plt.scatter(x,y)
     plt.show()
 
-    #FOR BATCH FILE 
+    #FOR BATCH FILE
     if(len(sys.argv)==5): #batch file will go through here
-    run_trials(trials=5,type=sys.argv[1],method=sys.argv[2],den=int(sys.argv[3]),size=int(sys.argv[4]))
+        run_trials(trials=5,type=sys.argv[1],method=sys.argv[2],den=int(sys.argv[3]),size=int(sys.argv[4]))
 
 
 """
@@ -231,11 +252,11 @@ corresponding formulation options:
     glover_cons : ['original', 'sub1', 'sub2']
 """
 
-specs = {"density":[25,50,75,100], "type":["QKP", "KQKP", "HSP"]}
-analyze(df_name='batch3_reorder_smaller', new_folder_name='testing', specifications=specs,
-   test_variable="options", formulations=[0,1,2,3,4])
+# specs = {"density":[25,50,75,100], "type":["QKP", "KQKP", "HSP"]}
+# analyze(df_name='batch3_reorder_smaller', new_folder_name='testing', specifications=specs,
+#    test_variable="options", formulations=[0,1,2,3,4])
 
 df = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_smaller"))
 df2 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder"))
 df3 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_bigger"))
-make_line_graph([df,df2,df3],save_loc="",variable="options",formulations=[0,1,2,3,4])
+make_line_graph([df2],save_loc="",variable="options",formulations=[0,1,2,3,4])
