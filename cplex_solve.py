@@ -165,10 +165,14 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 				else:
 					bound_m.remove_constraint(l_con)
 				L1[j] = bound_m.objective_value
+			#end bound model
+			bound_m.end()
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
 	end = timer()
 	setup_time = end-start
+
+
 
 	#add auxiliary constrains
 	if(constraints=="original"):
@@ -607,6 +611,8 @@ def ss_linear_formulation(quad, **kwargs):
 		bound_m.set_objective(sense="min", expr=bound_m.sum(C[i,j]*bound_x[j] for j in range(n)))
 		bound_m.solve()
 		L[i] = bound_m.objective_value
+	# end bound model
+	bound_m.end()
 	end = timer()
 	setup_time = end-start
 	#add auxiliary constraints
@@ -738,6 +744,8 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 					bound_mdl.solve()
 					L1[i,k] = bound_mdl.objective_value
 					bound_mdl.remove_constraint(l_con)
+		# end bound model
+		bound_mdl.end()
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
 	end = timer()
@@ -846,7 +854,8 @@ def qsap_ss(qsap, **kwargs):
 			bound_mdl.set_objective(sense="min", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)))
 			bound_mdl.solve()
 			L[i,k] = bound_mdl.objective_value
-
+	# end bound model
+	bound_mdl.end()
 	end = timer()
 	setup_time = end-start
 	#add auxiliary constraints
