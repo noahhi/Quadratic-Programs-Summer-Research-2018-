@@ -311,6 +311,26 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 		y = np.array([[xp.var(vartype=xp.continuous) for i in range(n)] for i in range(n)])
 		m.addVariable(x,w,y)
 
+		#keep track of order constraints are added so can retrieve duals values later
+		constraint_count = 0
+		con16 = []
+		con17 = []
+
+		# add constraints 16 and 17, for which the duals will be needed
+		for i in range(n):
+			for j in range(i+1, n):
+				m.addConstraint(w[i, j] == w[j, i])
+				con16.append(constraint_count)
+				constraint_count+=1
+		for j in range(n):
+			for i in range(n):
+				if(i == j):
+					continue
+				# con 17
+				m.addConstraint(y[i, j] == x[i]-w[i, j])
+				con17.append(constraint_count)
+				constraint_count+=1
+
 		if type(quad) is Knapsack:
 			# Multiply knapsack constraints by each x_j and (1-x_j)
 			# Note: no need to include original knapsack constraints
@@ -325,17 +345,9 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 		if quad.num_items > 0:
 			# Multiply partition constraint by each x_j
 			# Note: There is no need to multiple by each (1-x_j), but must include original constraints
-			m.addConstraint(xp.sum(x[i] for i in range(n)) == quad.num_items)
+			m.addConstraint(xp.Sum(x[i] for i in range(n)) == quad.num_items)
 			for j in range(n):
-				m.addConstraint(xp.sum(w[i,j] for i in range(n) if i!=j)== (quad.num_items-1)*x[j])
-
-		# add auxiliary constraints
-		for i in range(n):
-			for j in range(i+1, n):
-				# con 16
-				#m.addConstraint(w[i, j] == w[j, i], name='con16'+str(i)+str(j))
-				m.addConstraint(w[i, j] == w[j, i])
-
+				m.addConstraint(xp.Sum(w[i,j] for i in range(n) if i!=j)== (quad.num_items-1)*x[j])
 
 		for j in range(n):
 			for i in range(n):
@@ -345,9 +357,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 				m.addConstraint(w[i, j] <= x[j])
 				# con 15 (y>=0 implied)
 				m.addConstraint(y[i, j] <= 1-x[j])
-				# con 17
-				#m.addConstraint(y[i, j] == x[i]-w[i, j], name='con17'+str(i)+str(j))
-				m.addConstraint(y[i, j] == x[i]-w[i, j])
 
 		quadratic_values = 0
 		for j in range(n):
@@ -360,8 +369,8 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 		m.setObjective(linear_values + quadratic_values, sense=xp.maximize)
 
 
-		# return model
-		return m
+		# return model, and indices for constraint duals
+		return [m, con16, con17]
 
 
 	n = quad.n
@@ -373,39 +382,48 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 	# model with continuous relaxed rlt1 and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
 	start = timer()
-	m.solve()
-	d = m.getDual()
-	print(d)
-	#print(m.getObjVal())     #this should be continuous relax solution to glover_ext.
-	# retrieve dual variables
+	m[0].solve()
+	d = m[0].getDual()
+	con16indices = m[1]
+	con17indices = m[2]
+	print(m[0].getObjVal())     #this should be continuous relax solution to glover_ext.
+	con16duals = d[con16indices[0]:con16indices[-1]+1]
+	#con17duals = d[con17indices[0]:con17indices[-1]+1]
+	con17duals = [d[index] for index in con17indices]
+
 	duals16 = np.zeros((n, n))
 	duals17 = np.zeros((n, n))
+	dualcount = 0
 	for i in range(n):
 		for j in range(i+1, n):
-			con_name = 'con16'+str(i)+str(j)
-			duals16[i][j] = (m.getConstrByName(con_name).getAttr(GRB.attr.Pi))
-		for j in range(n):
+			duals16[i][j] = con16duals[dualcount]
+			dualcount+=1
+	dualcount = 0
+	for j in range(n):
+		for i in range(n):
 			if i == j:
 				continue
-			con_name = 'con17'+str(i)+str(j)
-			duals17[i][j] = (m.getConstrByName(con_name).getAttr(GRB.attr.Pi))
+			duals17[i][j] = con17duals[dualcount]
+			dualcount+=1
 
-	D = np.zeros((n, n))
-	E = np.zeros((n, n))
+	Cbar = np.zeros((n, n))
+	Chat = np.zeros((n, n))
 	# optimal split, found using dual vars from rlt1 continuous relaxation
 	for i in range(n):
 		for j in range(n):
 			if i == j:
 				continue
 			if i < j:
-				D[i, j] = C[i, j]-duals16[i, j]-duals17[i, j]
+				Cbar[i, j] = C[i, j]-duals16[i, j]-duals17[i, j]
+				Chat[i, j] = -duals17[i,j]
 			if i > j:
-				D[i, j] = C[i, j]+duals16[j, i]-duals17[i, j]
-	E = -duals17
+				Cbar[i, j] = C[i, j]+duals16[j, i]-duals17[i, j]
+				Chat[i, j] = -duals17[i,j]
+	#Chat = -duals17
 
 	# update linear values as well
 	for j in range(n):
-		c[j] = c[j] + xp.Sum(duals17[j, i] for i in range(n))
+		c[j] = c[j] + sum(duals17[j, i] for i in range(n) if i!=j)
 
 	# simple split (this works but is not optimal)
 	# for i in range(n):
@@ -415,95 +433,137 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 		# E[i,j] = C[i,j]/4
 		# E[j,i] = C[i,j]/4
 
-	# create model and add variables
-	m = xp.problem(name='glovers_linearization_ext_'+bounds+'_'+constraints)
-	x = m.addVars(n, name="binary_var", vtype=GRB.BINARY)
+	#create model and add variables
+	m = xp.problem(name='glovers_linearization_rlt_'+bounds+'_'+constraints)
+	x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
+	m.addVariable(x)
 
-	if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
-		# add capacity constraint(s)
+	if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+		#add capacity constraint(s)
 		for k in range(quad.m):
-			m.addConstraint(xp.Sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+			m.addConstraint(xp.Sum(a[k][i]*x[i] for i in range(n)) <= b[k])
 
 	#k_item constraint if necessary (if KQKP or HSP)
 	if quad.num_items > 0:
 		m.addConstraint(xp.Sum(x[i] for i in range(n)) == quad.num_items)
 
-	# determine bounds for each column of C
-	U1 = np.zeros(n)
-	L1 = np.zeros(n)
-	U2 = np.zeros(n)
-	L2 = np.zeros(n)
-	if(bounds == "original"):
+	#determine bounds for each column of C
+	Ubar1 = np.zeros(n)
+	Lbar0 = np.zeros(n)
+	Uhat0 = np.zeros(n)
+	Lhat1 = np.zeros(n)
+
+	if(bounds=="original"):
 		for j in range(n):
-			col1 = D[:, j]
-			col2 = E[:, j]
-			U1[j] = np.sum(col1[col1 > 0])
-			L1[j] = np.sum(col1[col1 < 0])
-			U2[j] = np.sum(col2[col2 > 0])
-			L2[j] = np.sum(col2[col2 < 0])
+			col1 = Cbar[:,j]
+			col2 = Chat[:,j]
+			Ubar1[j] = np.sum(col1[col1>0])
+			Lbar0[j] = np.sum(col1[col1<0])
+			Uhat0[j] = np.sum(col2[col2>0])
+			Lhat1[j] = np.sum(col2[col2<0])
+	elif(bounds=="tight"):
+		bound_m = xp.problem(name='bound_model')
+		bound_m.setlogfile("xpress.log")
+		bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
+		bound_m.addVariable(bound_x)
 
-	elif(bounds == "tight"):
-		u_bound_m1 = xp.problem(name='upper_bound_model1')
-		l_bound_m1 = xp.problem(name='lower_bound_model1')
-		bound_x1 = u_bound_m1.addVars(n, ub=1, lb=0.0)
-		l_bound_x1 = l_bound_m1.addVars(n, ub=1, lb=0.0)
-		for k in range(quad.m):
-			u_bound_m1.addConstraint(xp.Sum(u_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
-			l_bound_m1.addConstraint(xp.Sum(l_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
-		u_bound_m2 = xp.problem(name='upper_bound_model2')
-		l_bound_m2 = xp.problem(name='lower_bound_model2')
-		u_bound_x2 = u_bound_m2.addVars(n, ub=1, lb=0)
-		l_bound_x2 = l_bound_m2.addVars(n, ub=1, lb=0)
-		for k in range(quad.m):
-			u_bound_m2.addConstraint(xp.Sum(u_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
-			l_bound_m2.addConstraint(xp.Sum(l_bound_x2[i]*a[k][i] for i in range(n)) <= b[k])
+		# Add in original structural constraints
+		if type(quad) is Knapsack: #HSP and UQP don't have cap constraint
+			# Include knapsack constraints
+			for k in range(quad.m):
+				bound_m.addConstraint(xp.Sum(a[k][i]*bound_x[i] for i in range(n)) <= b[k])
+
+		#k_item constraint if necessary (if KQKP or HSP)
+		if quad.num_items > 0:
+			bound_m.addConstraint(xp.Sum(bound_x[i] for i in range(n)) == quad.num_items)
 
 		for j in range(n):
-			u_bound_m1.setObjective(xp.Sum(D[i, j]*u_bound_x1[i] for i in range(n) if i != j), sense=xp.maximize)
-			l_bound_m1.setObjective(xp.Sum(D[i, j]*l_bound_x1[i] for i in range(n) if i != j), sense=xp.minimize)
-			u_con1 = u_bound_m1.addConstraint(u_bound_x1[j] == 1)
-			l_con1 = l_bound_m1.addConstraint(l_bound_x1[j] == 0)
-			u_bound_m1.solve()
-			l_bound_m1.solve()
-			u_bound_m1.delConstraint(u_con1)
-			l_bound_m1.delConstraint(l_con1)
-			U1[j] = u_bound_m1.getObjVal()
-			L1[j] = l_bound_m1.getObjVal()
+			# Solve for Ubar1
+			bound_m.setObjective(xp.Sum(Cbar[i,j]*bound_x[i] for i in range(n) if i!=j), sense=xp.maximize)
+			xEquals1 = bound_x[j] == 1
+			bound_m.addConstraint(xEquals1)
+			bound_m.solve()
+			if "optimal" not in str(bound_m.getProbStatusString()):
+				# in case the xEquals1 constraint makes problem infeasible. (happens with kitem sometimes)
+				bound_m.delConstraint(xEquals1)
+				bound_m.addConstraint(bound_x[j]==0)
+				m.addConstraint(x[j]==0)
+				bound_m.solve()
+			else:
+				bound_m.delConstraint(xEquals1)
+			Ubar1[j] = bound_m.getObjVal()
 
-			u_bound_m2.setObjective(xp.Sum(E[i, j]*u_bound_x2[i] for i in range(n) if i != j), sense=xp.maximize)
-			l_bound_m2.setObjective(xp.Sum(E[i, j]*l_bound_x2[i] for i in range(n) if i != j), sense=xp.minimize)
-			u_con2 = u_bound_m2.addConstraint(u_bound_x2[j] == 0)
-			l_con2 = l_bound_m2.addConstraint(l_bound_x2[j] == 1)
-			u_bound_m2.solve()
-			l_bound_m2.solve()
-			u_bound_m2.delConstraint(u_con2)
-			l_bound_m2.delConstraint(l_con2)
-			U2[j] = u_bound_m2.getObjVal()
-			L2[j] = l_bound_m2.getObjVal()
+			# Solve for Lbar0
+			bound_m.setObjective(xp.Sum(Cbar[i,j]*bound_x[i] for i in range(n) if i!=j), sense=xp.minimize)
+			xEquals0 = bound_x[j]==0
+			bound_m.addConstraint(xEquals0)
+			bound_m.solve()
+			if "optimal" not in str(bound_m.getProbStatusString()):
+				# in case the xEquals1 constraint makes problem infeasible. (happens with kitem sometimes)
+				bound_m.delConstraint(xEquals0)
+				bound_m.addConstraint(bound_x[j]==1)
+				m.addConstraint(x[j]==1)
+				bound_m.solve()
+			else:
+				bound_m.delConstraint(xEquals0)
+			Lbar0[j] = bound_m.getObjVal()
+
+			# Solve for Uhat0
+			bound_m.setObjective(xp.Sum(Chat[i,j]*bound_x[i] for i in range(n) if i!=j), sense=xp.maximize)
+			xEquals0 = bound_x[j]==0
+			bound_m.addConstraint(xEquals0)
+			bound_m.solve()
+			if "optimal" not in str(bound_m.getProbStatusString()):
+				# in case the xEquals1 constraint makes problem infeasible. (happens with kitem sometimes)
+				bound_m.delConstraint(xEquals0)
+				bound_m.addConstraint(bound_x[j]==1)
+				m.addConstraint(x[j]==1)
+				bound_m.solve()
+			else:
+				bound_m.delConstraint(xEquals0)
+			Uhat0[j] = bound_m.getObjVal()
+
+			# Solve for Lhat1
+			bound_m.setObjective(xp.Sum(Chat[i,j]*bound_x[i] for i in range(n) if i!=j), sense=xp.minimize)
+			xEquals1 = bound_x[j]==1
+			bound_m.addConstraint(xEquals1)
+			bound_m.solve()
+			if "optimal" not in str(bound_m.getProbStatusString()):
+				# in case the xEquals1 constraint makes problem infeasible. (happens with kitem sometimes)
+				bound_m.delConstraint(xEquals1)
+				bound_m.addConstraint(bound_x[j]==0)
+				m.addConstraint(x[j]==0)
+				bound_m.solve()
+			else:
+				bound_m.delConstraint(xEquals1)
+			Lhat1[j] = bound_m.getObjVal()
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
-
-	# add auxiliary constrains
-	if(constraints == "original"):
-		z1 = m.addVars(n, lb=-GRB.INFINITY)
-		z2 = m.addVars(n, lb=-GRB.INFINITY)
-		for j in range(n):
-			m.addConstraint(z1[j] <= U1[j]*x[j])
-			m.addConstraint(z2[j] <= U2[j]*(1-x[j]))
-		for j in range(n):
-			tempsum1 = xp.Sum(D[i, j]*x[i] for i in range(n) if i != j)
-			m.addConstraint(z1[j] <= tempsum1 - L1[j]*(1-x[j]))
-			tempsum2 = xp.Sum(E[i, j]*x[i] for i in range(n) if i != j)
-			m.addConstraint(z2[j] <= tempsum2 - (L2[j]*x[j]))
-		m.setObjective(xp.Sum(c[j]*x[j] + z1[j] + z2[j] for j in range(n)), sense=xp.maximize)
-	else:
-		raise Exception(constraints + " is not a valid constraint type for glovers")
 
 	end = timer()
 	setup_time = end-start
 
-	# return model
-	return [m, setup_time]
+	if(constraints=="original"):
+		z1 = np.array([xp.var(vartype=xp.continuous, lb=-xp.infinity) for i in range(n)])
+		z2 = np.array([xp.var(vartype=xp.continuous, lb=-xp.infinity) for i in range(n)])
+		m.addVariable(z1,z2)
+
+		for j in range(n):
+			m.addConstraint(z1[j] <= Ubar1[j]*x[j])
+			tempsum1 = sum(Cbar[i,j]*x[i] for i in range(n) if i!=j)
+			m.addConstraint(z1[j] <= tempsum1 - Lbar0[j]*(1-x[j]))
+
+			m.addConstraint(z2[j] <= Uhat0[j]*(1-x[j]))
+			tempsum2 = sum(Chat[i,j]*x[i] for i in range(n) if i!=j)
+			m.addConstraint(z2[j] <= tempsum2 - (Lhat1[j]*x[j]))
+
+		# Set up the objective function
+		m.setObjective(xp.Sum(c[j]*x[j] + z1[j] + z2[j] for j in range(n)), sense=xp.maximize)
+	else:
+		raise Exception(constraints + " is not a valid constraint type for glovers")
+
+	#return model
+	return [m,setup_time]
 
 def extended_linear_formulation(quad, **kwargs):
 	start = timer()
@@ -956,6 +1016,3 @@ def solve_model(m, solve_relax=True, **kwargs):
 			   "integrality_gap": integrality_gap,
 				"time_limit":time_limit}
 	return results
-
-p=Knapsack()
-glovers_linearization_rlt(p)
