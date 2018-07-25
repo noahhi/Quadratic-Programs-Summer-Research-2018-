@@ -105,79 +105,77 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 				U0[j] = U1[j] - col[j]
 				L1[j] = L0[j] + col[j]
 	elif(bounds == "tight" or bounds=="tighter"):
-		u_bound_m = xp.problem(name='upper_bound_model')
-		u_bound_m.setlogfile("xpress.log")
-		l_bound_m = xp.problem(name='lower_bound_model')
-		l_bound_m.setlogfile("xpress.log")
+		bound_m = xp.problem(name='bound_model')
+		bound_m.setlogfile("xpress.log")
 		if bounds=="tight":
-			u_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
-			l_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
+			bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
 		elif bounds=="tighter":
-			u_bound_x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
-			l_bound_x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
-		u_bound_m.addVariable(u_bound_x)
-		l_bound_m.addVariable(l_bound_x)
+			bound_x = np.array([xp.var(vartype=xp.binary) for i in range(n)])
+		bound_m.addVariable(bound_x)
 		if type(quad) is Knapsack:
 			for k in range(quad.m):
 				#add capacity constraints
-				u_bound_m.addConstraint(xp.Sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
-				l_bound_m.addConstraint(xp.Sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+				bound_m.addConstraint(xp.Sum(bound_x[i]*a[k][i] for i in range(n)) <= b[k])
 		if quad.num_items > 0:
-			u_bound_m.addConstraint(xp.Sum(u_bound_x[i] for i in range(n)) == quad.num_items)
-			l_bound_m.addConstraint(xp.Sum(l_bound_x[i] for i in range(n)) == quad.num_items)
+			bound_m.addConstraint(xp.Sum(bound_x[i] for i in range(n)) == quad.num_items)
 		for j in range(n):
 			#for each col, solve model to find upper/lower bound
-			u_bound_m.setObjective(xp.Sum(C[i, j]*u_bound_x[i] for i in range(n)), sense=xp.maximize)
-			l_bound_m.setObjective(xp.Sum(C[i, j]*l_bound_x[i] for i in range(n)), sense=xp.minimize)
-			u_con = u_bound_x[j] == 1
-			u_bound_m.addConstraint(u_con)
-			l_con = l_bound_x[j] == 0
-			l_bound_m.addConstraint(l_con)
-			u_bound_m.solve()
-			if "optimal" not in str(u_bound_m.getProbStatusString()):
+			bound_m.setObjective(xp.Sum(C[i, j]*bound_x[i] for i in range(n)), sense=xp.maximize)
+			u_con = bound_x[j] == 1
+			bound_m.addConstraint(u_con)
+			bound_m.solve()
+			if "optimal" not in str(bound_m.getProbStatusString()):
 				#print("non-optimal solve status: " + str(u_bound_m.getProbStatusString()) + " when solving for upper bound (U1)")
-				u_bound_m.delConstraint(u_con)
-				u_bound_m.addConstraint(u_bound_x[j]==0)
+				bound_m.delConstraint(u_con)
+				bound_m.addConstraint(bound_x[j]==0)
 				m.addConstraint(x[j]==0)
-				u_bound_m.solve()
+				bound_m.solve()
 			else:
-				u_bound_m.delConstraint(u_con)
-			l_bound_m.solve()
-			if "optimal" not in str(l_bound_m.getProbStatusString()):
+				bound_m.delConstraint(u_con)
+			U1[j] = bound_m.getObjVal()
+
+			bound_m.setObjective(xp.Sum(C[i, j]*bound_x[i] for i in range(n)), sense=xp.minimize)
+			l_con = bound_x[j] == 0
+			bound_m.addConstraint(l_con)
+			bound_m.solve()
+			if "optimal" not in str(bound_m.getProbStatusString()):
 				#print("non-optimal solve status: " + str(l_bound_m.getProbStatusString()) + " when solving for lower bound (L0)")
-				l_bound_m.delConstraint(l_con)
-				l_bound_m.addConstraint(l_bound_x[j]==1)
+				bound_m.delConstraint(l_con)
+				bound_m.addConstraint(bound_x[j]==1)
 				m.addConstraint(x[j]==1)
-				l_bound_m.solve()
+				bound_m.solve()
 			else:
-				l_bound_m.delConstraint(l_con)
-			U1[j] = u_bound_m.getObjVal()
-			L0[j] = l_bound_m.getObjVal()
+				bound_m.delConstraint(l_con)
+			L0[j] = bound_m.getObjVal()
+
 			if lhs_constraints:
-				u_con = u_bound_x[j] == 0
-				u_bound_m.addConstraint(u_con)
-				l_con = l_bound_x[j] == 1
-				l_bound_m.addConstraint(l_con)
-				u_bound_m.solve()
-				if "optimal" not in str(u_bound_m.getProbStatusString()):
+				bound_m.setObjective(xp.Sum(C[i, j]*bound_x[i] for i in range(n)), sense=xp.maximize)
+				u_con = bound_x[j] == 0
+				bound_m.addConstraint(u_con)
+				bound_m.solve()
+				if "optimal" not in str(bound_m.getProbStatusString()):
 					#print("non-optimal solve status: " + str(u_bound_m.status) + " when solving for upper bound (U0)")
-					u_bound_m.delConstraint(u_con)
-					u_bound_m.addConstraint(u_bound_x[j]==1)
+					bound_m.delConstraint(u_con)
+					bound_m.addConstraint(bound_x[j]==1)
 					m.addConstraint(x[j]==1)
-					u_bound_m.solve()
+					bound_m.solve()
 				else:
-					u_bound_m.delConstraint(u_con)
-				l_bound_m.solve()
-				if "optimal" not in str(l_bound_m.getProbStatusString()):
+					bound_m.delConstraint(u_con)
+				U0[j] = bound_m.getObjVal()
+
+				bound_m.setObjective(xp.Sum(C[i, j]*bound_x[i] for i in range(n)), sense=xp.minimize)
+				l_con = bound_x[j] == 1
+				bound_m.addConstraint(l_con)
+				bound_m.solve()
+				if "optimal" not in str(bound_m.getProbStatusString()):
 					#print("non-optimal solve status: " + str(l_bound_m.status) + " when solving for lower bound (L1)")
-					l_bound_m.delConstraint(l_con)
-					l_bound_m.addConstraint(l_bound_x[j]==0)
+					bound_m.delConstraint(l_con)
+					bound_m.addConstraint(bound_x[j]==0)
 					m.addConstraint(x[j]==0)
-					l_bound_m.solve()
+					bound_m.solve()
 				else:
-					l_bound_m.delConstraint(l_con)
-				U0[j] = u_bound_m.getObjVal()
-				L1[j] = l_bound_m.getObjVal()
+					bound_m.delConstraint(l_con)
+				L1[j] = bound_m.getObjVal()
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
 	end = timer()
@@ -297,7 +295,6 @@ def glovers_linearization_prlt(quad, **kwargs):
 	setup_time = end-start
 	return [new_m, setup_time]
 
-#TODO glovers_rlt currently works only for knapsack w/ original constraints
 def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kwargs):
 	def rlt1_linearization(quad):
 		n = quad.n
@@ -314,14 +311,23 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 		y = np.array([[xp.var(vartype=xp.continuous) for i in range(n)] for i in range(n)])
 		m.addVariable(x,w,y)
 
-		if type(quad) is Knapsack:  # HSP and UQP don't have cap constraint
-			# add capacity constraint(s)
+		if type(quad) is Knapsack:
+			# Multiply knapsack constraints by each x_j and (1-x_j)
+			# Note: no need to include original knapsack constraints
 			for k in range(quad.m):
-				m.addConstraint(xp.Sum(x[i]*a[k][i] for i in range(n)) <= b[k])
+				for j in range(n):
+					#con 12
+					m.addConstraint(xp.Sum(a[k][i]*w[i,j] for i in range(n) if i!=j)<=(b[k]-a[k][j])*x[j])
+					#con 14
+					m.addConstraint(xp.Sum(a[k][i]*y[i,j] for i in range(n) if i!=j)<=b[k]*(1-x[j]))
 
 		#k_item constraint if necessary (if KQKP or HSP)
 		if quad.num_items > 0:
-			m.addConstraint(xp.Sum(x[i] for i in range(n)) == quad.num_items)
+			# Multiply partition constraint by each x_j
+			# Note: There is no need to multiple by each (1-x_j), but must include original constraints
+			m.addConstraint(xp.sum(x[i] for i in range(n)) == quad.num_items)
+			for j in range(n):
+				m.addConstraint(xp.sum(w[i,j] for i in range(n) if i!=j)== (quad.num_items-1)*x[j])
 
 		# add auxiliary constraints
 		for i in range(n):
@@ -330,12 +336,6 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 				#m.addConstraint(w[i, j] == w[j, i], name='con16'+str(i)+str(j))
 				m.addConstraint(w[i, j] == w[j, i])
 
-		for k in range(quad.m):
-			for j in range(n):
-				# con 12
-				m.addConstraint(xp.Sum(a[k][i]*w[i, j] for i in range(n) if i != j) <= (b[k]-a[k][j])*x[j])
-				# con 14
-				m.addConstraint(xp.Sum(a[k][i]*y[i, j] for i in range(n) if i != j) <= b[k]*(1-x[j]))
 
 		for j in range(n):
 			for i in range(n):
@@ -363,7 +363,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 		# return model
 		return m
 
-	start = timer()
+
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -372,6 +372,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 
 	# model with continuous relaxed rlt1 and get duals to constraints 16,17
 	m = rlt1_linearization(quad)
+	start = timer()
 	m.solve()
 	d = m.getDual()
 	print(d)
@@ -444,7 +445,7 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 	elif(bounds == "tight"):
 		u_bound_m1 = xp.problem(name='upper_bound_model1')
 		l_bound_m1 = xp.problem(name='lower_bound_model1')
-		u_bound_x1 = u_bound_m1.addVars(n, ub=1, lb=0.0)
+		bound_x1 = u_bound_m1.addVars(n, ub=1, lb=0.0)
 		l_bound_x1 = l_bound_m1.addVars(n, ub=1, lb=0.0)
 		for k in range(quad.m):
 			u_bound_m1.addConstraint(xp.Sum(u_bound_x1[i]*a[k][i] for i in range(n)) <= b[k])
@@ -583,30 +584,25 @@ def ss_linear_formulation(quad, **kwargs):
 
 	U = np.zeros(n)
 	L = np.zeros(n)
-	u_bound_m = xp.problem(name='upper_bound_model')
-	l_bound_m = xp.problem(name='lower_bound_model')
-	u_bound_m.setlogfile("xpress.log")
-	l_bound_m.setlogfile("xpress.log")
-	u_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
-	l_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
-	u_bound_m.addVariable(u_bound_x)
-	l_bound_m.addVariable(l_bound_x)
+	bound_m = xp.problem(name='bound_model')
+	bound_m.setlogfile("xpress.log")
+	bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(n)])
+	bound_m.addVariable(bound_x)
 	if type(quad) is Knapsack:
 		for k in range(quad.m):
 			#add capacity constraints
-			u_bound_m.addConstraint(xp.Sum(u_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
-			l_bound_m.addConstraint(xp.Sum(l_bound_x[i]*a[k][i] for i in range(n)) <= b[k])
+			bound_m.addConstraint(xp.Sum(bound_x[i]*a[k][i] for i in range(n)) <= b[k])
 	if quad.num_items > 0:
-		u_bound_m.addConstraint(xp.Sum(u_bound_x[i] for i in range(n)) == quad.num_items)
-		l_bound_m.addConstraint(xp.Sum(l_bound_x[i] for i in range(n)) == quad.num_items)
+		bound_m.addConstraint(xp.Sum(bound_x[i] for i in range(n)) == quad.num_items)
 	for i in range(n):
 		#for each col, solve model to find upper/lower bound
-		u_bound_m.setObjective(xp.Sum(C[i,j]*u_bound_x[j] for j in range(n)), sense=xp.maximize)
-		l_bound_m.setObjective(xp.Sum(C[i,j]*l_bound_x[j] for j in range(n)), sense=xp.minimize)
-		u_bound_m.solve()
-		l_bound_m.solve()
-		U[i] = u_bound_m.getObjVal()
-		L[i] = l_bound_m.getObjVal()
+		bound_m.setObjective(xp.Sum(C[i,j]*bound_x[j] for j in range(n)), sense=xp.maximize)
+		bound_m.solve()
+		U[i] = bound_m.getObjVal()
+
+		bound_m.setObjective(xp.Sum(C[i,j]*bound_x[j] for j in range(n)), sense=xp.minimize)
+		bound_m.solve()
+		L[i] = bound_m.getObjVal()
 
 	#add auxiliary constraints
 	for i in range(n):
@@ -706,45 +702,44 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 					U0[i,k] = U1[i,k] - col[i,k]
 					L1[i,k] = L0[i,k] + col[i,k]
 	elif bounds=="tight" or bounds=="tighter":
-		u_bound_mdl = xp.problem(name="u_bound_m")
-		u_bound_mdl.setlogfile("xpress.log")
-		l_bound_mdl = xp.problem(name="l_bound_m")
-		l_bound_mdl.setlogfile("xpress.log")
+		bound_mdl = xp.problem(name="bound_m")
+		bound_mdl.setlogfile("xpress.log")
 		if bounds=="tight":
-			u_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
-			l_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
+			bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
 		elif bounds == "tighter":
-			u_bound_x = np.array([xp.var(vartype=xp.binary, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
-			l_bound_x = np.array([xp.var(vartype=xp.binary, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
-		u_bound_mdl.addVariable(u_bound_x)
-		l_bound_mdl.addVariable(l_bound_x)
-		u_bound_mdl.addConstraint((xp.Sum(u_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
-		l_bound_mdl.addConstraint((xp.Sum(l_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
+			bound_x = np.array([xp.var(vartype=xp.binary, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
+		bound_mdl.addVariable(bound_x)
+		bound_mdl.addConstraint((xp.Sum(bound_x[i,k] for k in range(n)) == 1) for i in range(m))
 		for i in range(m-1):
 			for k in range(n):
-				u_bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*u_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.maximize)
-				l_bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*l_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.minimize)
-				u_con = u_bound_x[i,k] == 1
-				u_bound_mdl.addConstraint(u_con)
-				l_con = l_bound_x[i,k] == 0
-				l_bound_mdl.addConstraint(l_con)
-				u_bound_mdl.solve()
-				l_bound_mdl.solve()
-				U1[i,k] = u_bound_mdl.getObjVal()
-				L0[i,k] = l_bound_mdl.getObjVal()
-				u_bound_mdl.delConstraint(u_con)
-				l_bound_mdl.delConstraint(l_con)
+				bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.maximize)
+				u_con = bound_x[i,k] == 1
+				bound_mdl.addConstraint(u_con)
+				bound_mdl.solve()
+				bound_mdl.delConstraint(u_con)
+				U1[i,k] = bound_mdl.getObjVal()
+
+				bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.minimize)
+				l_con = bound_x[i,k] == 0
+				bound_mdl.addConstraint(l_con)
+				bound_mdl.solve()
+				bound_mdl.delConstraint(l_con)
+				L0[i,k] = bound_mdl.getObjVal()
+
 				if lhs_constraints:
-					u_con = u_bound_x[i,k] == 0
-					u_bound_mdl.addConstraint(u_con)
-					l_con = l_bound_x[i,k] == 1
-					l_bound_mdl.addConstraint(l_con)
-					u_bound_mdl.solve()
-					l_bound_mdl.solve()
-					U0[i,k] = u_bound_mdl.getObjVal()
-					L1[i,k] = l_bound_mdl.getObjVal()
-					u_bound_mdl.delConstraint(u_con)
-					l_bound_mdl.delConstraint(l_con)
+					bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.maximize)
+					u_con = bound_x[i,k] == 0
+					bound_mdl.addConstraint(u_con)
+					bound_mdl.solve()
+					bound_mdl.delConstraint(u_con)
+					U0[i,k] = bound_mdl.getObjVal()
+
+					bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.minimize)
+					l_con = bound_x[i,k] == 1
+					bound_mdl.addConstraint(l_con)
+					bound_mdl.solve()
+					bound_mdl.delConstraint(l_con)
+					L1[i,k] = bound_mdl.getObjVal()
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
 
@@ -786,7 +781,6 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	return [mdl,setup_time]
 
 def qsap_elf(qsap, **kwargs):
-	start = timer()
 	n = qsap.n
 	m = qsap.m
 	e = qsap.e
@@ -824,10 +818,8 @@ def qsap_elf(qsap, **kwargs):
 	linear_values = sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
 	mdl.setObjective(linear_values + constant - quadratic_values, sense=xp.maximize)
 
-	end = timer()
-	setup_time = end-start
 	#return model + setup time
-	return [mdl, setup_time]
+	return [mdl, 0]
 
 def qsap_ss(qsap, **kwargs):
 	"""
@@ -849,24 +841,22 @@ def qsap_ss(qsap, **kwargs):
 	start = timer()
 	U = np.zeros((m,n))
 	L = np.zeros((m,n))
-	u_bound_mdl = xp.problem(name='upper_bound_model')
-	u_bound_mdl.setlogfile("xpress.log")
-	l_bound_mdl = xp.problem(name='lower_bound_model')
-	l_bound_mdl.setlogfile("xpress.log")
-	u_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
-	l_bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
-	u_bound_mdl.addVariable(u_bound_x)
-	l_bound_mdl.addVariable(l_bound_x)
-	u_bound_mdl.addConstraint((sum(u_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
-	l_bound_mdl.addConstraint((sum(l_bound_x[i,k] for k in range(n)) == 1) for i in range(m))
+	bound_mdl = xp.problem(name='upper_bound_model')
+	bound_mdl.setlogfile("xpress.log")
+	bound_x = np.array([xp.var(vartype=xp.continuous, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
+	bound_mdl.addVariable(bound_x)
+	bound_mdl.addConstraint((sum(bound_x[i,k] for k in range(n)) == 1) for i in range(m))
 	for i in range(m-1):
 		for k in range(n):
-			u_bound_mdl.setObjective(sum(sum(c[i,k,j,l]*u_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.maximize)
-			l_bound_mdl.setObjective(sum(sum(c[i,k,j,l]*l_bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.minimize)
-			u_bound_mdl.solve()
-			l_bound_mdl.solve()
-			U[i,k] = u_bound_mdl.getObjVal()
-			L[i,k] = l_bound_mdl.getObjVal()
+			bound_mdl.setObjective(sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.maximize)
+			bound_mdl.solve()
+			U[i,k] = bound_mdl.getObjVal()
+
+			bound_mdl.setObjective(sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.minimize)
+			bound_mdl.solve()
+			L[i,k] = bound_mdl.getObjVal()
+	end = timer()
+	setup_time = end-start
 
 	#add auxiliary constraints
 	for i in range(m-1):
@@ -881,8 +871,6 @@ def qsap_ss(qsap, **kwargs):
 	linear_values = sum(sum(e[i,k]*x[i,k] for i in range(m)) for k in range(n))
 	mdl.setObjective(linear_values + sum(sum(s[i,k]+x[i,k]*(L[i,k]) for i in range(m-1)) for k in range(n)), sense=xp.maximize)
 
-	end = timer()
-	setup_time = end-start
 	#return model + setup time
 	return [mdl, setup_time]
 
@@ -968,3 +956,6 @@ def solve_model(m, solve_relax=True, **kwargs):
 			   "integrality_gap": integrality_gap,
 				"time_limit":time_limit}
 	return results
+
+p=Knapsack()
+glovers_linearization_rlt(p)

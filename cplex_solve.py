@@ -165,8 +165,8 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 				else:
 					bound_m.remove_constraint(l_con)
 				L1[j] = bound_m.objective_value
-			#end bound model
-			bound_m.end()
+		#end bound model
+		bound_m.end()
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
 	end = timer()
@@ -615,6 +615,7 @@ def ss_linear_formulation(quad, **kwargs):
 	bound_m.end()
 	end = timer()
 	setup_time = end-start
+	
 	#add auxiliary constraints
 	for i in range(n):
 		m.add_constraint(sum(C[i,j]*x[j] for j in range(n))-s[i]-L[i]==y[i])
@@ -625,6 +626,7 @@ def ss_linear_formulation(quad, **kwargs):
 
 	#set objective function
 	m.maximize(sum(s[i]+x[i]*(c[i]+L[i])for i in range(n)))
+
 	#return model + setup time
 	return [m, setup_time]
 
@@ -901,7 +903,7 @@ def solve_model(model, solve_relax=True, **kwargs):
 	#use with block to automatically call m.end() when finished
 	with model as m:
 		time_limit = False
-		m.set_time_limit(600)
+		m.set_time_limit(6000)
 		start = timer()
 		m.solve()
 		end = timer()

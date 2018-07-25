@@ -7,7 +7,8 @@ import time
 import pandas as pd
 from timeit import default_timer as timer
 
-def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric=False,
+#TODO default reorder should be false
+def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=False,
 			method="std",size=5,multiple=1,den=100, options=0,glover_bounds="tight", glover_cons="original",mixed_sign=False):
 	"""
 	Runs the same problem type thru given solver with given method repeatedly to get
@@ -101,20 +102,15 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 					raise Exception(str(method_) + " is not a valid method type")
 
 			cur_method = get_method(method)
-			m = cur_method(quad, bounds=glover_bounds, constraints=glover_cons, lhs_constraints=options, use_diagonal=False)
+			m = cur_method(quad, bounds=glover_bounds, constraints=glover_cons, lhs_constraints=False, use_diagonal=False)
 
 			if method=="no_lin":
 				results = cur_solver.solve_model(m[0], solve_relax=False)
 			else:
 				results = cur_solver.solve_model(m[0])
 
-			#retrieve info from solving instance
-			if 'ss' in method or (method=='glover' and (glover_bounds=="tight" or glover_bounds=="tighter")):
-				#only care about setup times for sherali-smith and glovers (time to compute bounds)
-				instance_setup_time = m[1]
-			else:
-				#otherwise setup time is inconsequential
-				instance_setup_time = 0
+			#note that this setup time is set to be 0 unless significant time operations are performed (ie. computing tight bounds)
+			instance_setup_time = m[1]
 			instance_solve_time = results.get("solve_time")
 			instance_obj_val = results.get("objective_value")
 			instance_int_gap = results.get("integrality_gap")
@@ -157,8 +153,8 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=False,symmetric
 		#reorder columns since dict is ordered randomly by default
 		df = df[["trial","solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
 					"density", "multiple", "instance_gap","instance_setup_time", "instance_solve_time", "instance_total_time", "instance_obj_val"]]
-		#save the dataframe in pickle format 
-		df.to_pickle('dataframes/batch3_reorder_bigger.pkl')
+		#save the dataframe in pickle format
+		df.to_pickle('dataframes/batch3_reorder_notimelimit.pkl')
 		#return results across trials
 		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":int_gap_sum/trials,
 					"avg_total_time":(setup_time_sum+solve_time_sum)/trials, "std_dev":np.std(instance_total_times),
@@ -187,7 +183,7 @@ if __name__=="__main__":
 	start = timer()
 	#this list of dictionaries will store all data
 	data = []
-	num_trials = 10
+	num_trials = 3
 	symmetry = [False]
 	cons = ["sub1"]
 	bounds = ["tight"]
@@ -228,7 +224,7 @@ if __name__=="__main__":
 				size=size+5,den=density, multiple=1, options=opt, glover_bounds="org", glover_cons=con)
 
 
-	hsp_set = ((25,45),(50,40),(75,35),(100,30))
+	hsp_set = ((25,45),(50,40),(75,35),(100,30)) #30,100 here is the bottleneck
 	for density,size in hsp_set:
 		for opt in options:
 			for bound in bounds:
