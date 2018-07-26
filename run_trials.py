@@ -7,12 +7,14 @@ import time
 import pandas as pd
 from timeit import default_timer as timer
 
-#TODO default reorder should be false
-def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=False,
+TIME_LIMIT = 3600
+DATAFRAME_NAME = "test"
+NUM_TRIALS = 10
+
+def run_trials(data_, solver="cplex",type="QKP",reorder=False,symmetric=False,
 			method="std",size=5,multiple=1,den=100, options=0,glover_bounds="tight", glover_cons="original",mixed_sign=False):
 	"""
-	Runs the same problem type thru given solver with given method repeatedly to get
-	an average solve time
+	Runs a set of trials on a given problem formulation
 	"""
 	#keep track of total run time across all trials to compute avg later
 	setup_time_sum, solve_time_sum, int_gap_sum, obj_sum = 0,0,0,0
@@ -31,10 +33,10 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=
 		f.write("Method: " + method+"\n")
 		f.write("nSize: " + str(size) +"\n")
 		f.write("Density: " + str(den) +"\n")
-		f.write("Trials: " + str(trials) +"\n")
+		f.write("Trials: " + str(NUM_TRIALS) +"\n")
 		f.write(seperator+"\n\n")
 
-		for i in range(trials):
+		for i in range(NUM_TRIALS):
 			#time_stamp = time.strftime("%H_%M")
 			#print("starting trial number {:2} at {}".format(i,time_stamp))
 			#print("starting at {}".format(time_stamp))
@@ -51,19 +53,25 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=
 					quad = UQP(seed=i+size+den, n=size, density=den, symmetric=symmetric)
 			elif type=="QSAP":
 					#qsap always 100% dense, so den is used instead to represent m. number of tasks
-					quad = QSAP(seed=i+size+den, n=size, m=den)
+					quad = QSAP(seed=i+size+den, n=size, m=den, symmetric=symmetric)
 			else:
 				raise Exception(str(type) + " is not a valid problem type")
 
+			start_reorder = timer()
 			if reorder==True:
 				if options==1:
-					quad.reorder(take_max=False,flip_order=False)
+					quad.reorder(take_max=False, flip_order=False)
 				elif options==2:
-					quad.reorder(take_max=False,flip_order=True)
+					quad.reorder(take_max=False, flip_order=True)
 				elif options==3:
-					quad.reorder(take_max=True,flip_order=False)
+					quad.reorder(take_max=True, flip_order=False)
 				elif options==4:
-					quad.reorder(take_max=True,flip_order=True)
+					quad.reorder(take_max=True, flip_order=True)
+				elif options==5:
+					quad.reorder_refined(take_max=False, flip_order=False)
+				elif options==6:
+					quad.reorder_refined(take_max=True, flip_order=True)
+			reorder_time = timer() - start_reorder
 
 			def get_solver(solver_):
 				if solver_=="cplex":
@@ -76,41 +84,47 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=
 			cur_solver = get_solver(solver)
 
 			def get_method(method_):
-				if method=="std" or method=="standard":
-					return cur_solver.standard_linearization
-				elif method=="glover":
-					return cur_solver.glovers_linearization
-				elif method=="glover_rlt":
-					return cur_solver.glovers_linearization_rlt
-				elif method=="glover_prlt":
-					return cur_solver.glovers_linearization_prlt
-				elif method=="qsap_glover":
-					return cur_solver.qsap_glovers
-				elif method=="qsap_elf":
-					return cur_solver.qsap_elf
-				elif method=="elf":
-					return cur_solver.extended_linear_formulation
-				elif method=="qsap_standard":
-					return cur_solver.qsap_standard
-				elif method=="qsap_ss":
-					return cur_solver.qsap_ss
-				elif method=="ss_linear_formulation":
-					return cur_solver.ss_linear_formulation
-				elif method=="no_lin":
-					return cur_solver.no_linearization
+				if type=="QSAP":
+					if method=="std" or method=="standard":
+						return cur_solver.qsap_standard
+					elif method=="glover" or method=="glovers":
+						return cur_solver.qsap_glovers
+					elif method=="glovers_rlt":
+						return cur_solver.qsap_rlt
+					elif method=="elf":
+						return cur_solver.qsap_elf
+					elif method=="sslf":
+						return cur_solver.qsap_ss
+					else:
+						raise Exception(str(method_) + " is not a valid method type")
 				else:
-					raise Exception(str(method_) + " is not a valid method type")
+					if method=="std" or method=="standard":
+						return cur_solver.standard_linearization
+					elif method=="glover" or method=="glovers":
+						return cur_solver.glovers_linearization
+					elif method=="glovers_rlt" or method=="rlt":
+						return cur_solver.glovers_linearization_rlt
+					elif method=="elf":
+						return cur_solver.extended_linear_formulation
+					elif method=="sslf":
+						return cur_solver.ss_linear_formulation
+					elif method=="no_lin":
+						return cur_solver.no_linearization
+					else:
+						raise Exception(str(method_) + " is not a valid method type")
 
 			cur_method = get_method(method)
 			m = cur_method(quad, bounds=glover_bounds, constraints=glover_cons, lhs_constraints=False, use_diagonal=False)
 
 			if method=="no_lin":
-				results = cur_solver.solve_model(m[0], solve_relax=False)
+				results = cur_solver.solve_model(m[0], solve_relax=False, time_limit=TIME_LIMIT)
 			else:
-				results = cur_solver.solve_model(m[0])
+				results = cur_solver.solve_model(m[0], time_limit=TIME_LIMIT)
 
 			#note that this setup time is set to be 0 unless significant time operations are performed (ie. computing tight bounds)
 			instance_setup_time = m[1]
+			if reorder:
+				instance_setup_time += reorder_time # add time to reorder to setuptime
 			instance_solve_time = results.get("solve_time")
 			instance_obj_val = results.get("objective_value")
 			instance_int_gap = results.get("integrality_gap")
@@ -154,12 +168,12 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=
 		df = df[["trial","solver", "type","reorder","mixed_sign", "symmetric", "method","glover_bounds", "glover_cons", "options","size",
 					"density", "multiple", "instance_gap","instance_setup_time", "instance_solve_time", "instance_total_time", "instance_obj_val"]]
 		#save the dataframe in pickle format
-		df.to_pickle('dataframes/batch3_reorder_notimelimit.pkl')
+		df.to_pickle('dataframes/{}.pkl'.format(DATAFRAME_NAME))
 		#return results across trials
-		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":int_gap_sum/trials,
-					"avg_total_time":(setup_time_sum+solve_time_sum)/trials, "std_dev":np.std(instance_total_times),
-					"avg_obj_val":obj_sum/trials, "symmetric": symmetric, "avg_setup_time": setup_time_sum/trials,
-					"avg_solve_time": solve_time_sum/trials, "glover_bounds": glover_bounds, "mixed_sign": mixed_sign, "reorder":reorder,
+		results = {"solver":solver, "type":type, "method":method, "options":options, "size":size, "density":den, "avg_gap":int_gap_sum/NUM_TRIALS,
+					"avg_total_time":(setup_time_sum+solve_time_sum)/NUM_TRIALS, "std_dev":np.std(instance_total_times),
+					"avg_obj_val":obj_sum/NUM_TRIALS, "symmetric": symmetric, "avg_setup_time": setup_time_sum/NUM_TRIALS,
+					"avg_solve_time": solve_time_sum/NUM_TRIALS, "glover_bounds": glover_bounds, "mixed_sign": mixed_sign, "reorder":reorder,
 					"multiple":multiple, "glover_cons":glover_cons}
 
 		#print results summary to log file by iterating through results dictionary
@@ -172,18 +186,29 @@ def run_trials(data_, trials=5,solver="cplex",type="QKP",reorder=True,symmetric=
 		return results
 
 if __name__=="__main__":
-	"""
-	solver = solver to use ("cplex", "gurobi")
-	type = problem type ("QKP", "KQKP", "UQP", "HSP", "QSAP")
-	method = linearization technique ("std", "glover", "glover_rlt", "glover_prlt", "qsap_glover","qsap_elf","elf", "no_lin")
-	glover_bounds = simple ub, continuous program ub, or binary ub ("original", "tight", "tighter")
-	glover_cons = ("original", "sub1", "sub2")
-	options = specify alternative/optional constraints specific to each linearization
-	"""
-	start = timer()
-	#this list of dictionaries will store all data
-	data = []
-	num_trials = 3
+	data = [] # this list will be filled with dictionaries containing all run_stats; used to make dataframes
+
+	# run trials constants
+	NUM_TRIALS = 3 # number of instances of each formulation to generate and solve
+	TIME_LIMIT = 3600 # max amount of time (seconds) to spend on each problem
+	DATAFRAME_NAME = "test" # dataframe will save to \dataframes\DATAFRAME_NAME
+
+	# variables. (each corresponds to a column of resulting dataframe)
+	SOLVERS = ["cplex", "gurobi", "xpress"] # 'solver' = {"cplex", "gurobi", "xpress"}
+	TYPES = ["QKP", "KQKP", "UQP", "HSP", "QSAP"] # 'type' = {"QKP", "KQKP", "UQP", "HSP", "QSAP"}
+	REORDER = [True, False] # 'reorder' = {True, False}
+	MIXED_SIGN = [True, False] # 'mixed_sign' = {True, False} ~true->mixed, false->nonnegative
+	SYMMETRIC = [True, False] # 'symmetric' = {True, False} ~true->symmetric, false->upper triangular
+	METHODS = ["standard", "glovers", "glovers_rlt", "elf", "sslf"] # 'method' = {"standard", "glovers", "glovers_rlt", "elf", "sslf"}
+	BOUNDS = ["original", "tight", "tighter"] # 'glover_bounds' = {"original", "tight", "tighter"}
+	CONSTRAINTS = ["original", "sub1", "sub2"] # 'glovers_cons' = {"original", "sub1", "sub2"}
+	OPTIONS = [0,1,2,3,4] # 'options' = {0-4} ~Used for reordering; or other misc things
+	MULTIPLE = [1, 5, 10] # 'multiple' = {1-10} ~only does anything for QKP; adds multiple Knapsack Constraints
+	SIZES = []
+	DENSITIES = []
+
+	start = timer() # record total time taken by running trials
+
 	symmetry = [False]
 	cons = ["sub1"]
 	bounds = ["tight"]
@@ -199,7 +224,7 @@ if __name__=="__main__":
 					for bound in bounds:
 						print("running-(size-{}, density-{}, type-{}, bound-{}, cons-{}, multiple-{}, symmetric-{}, options-{})".format(
 								size,density,"QKP","tight",0,mult,False,opt))
-						run_trials(data_=data, trials=num_trials, solver="cplex", type="QKP",symmetric=False, method="glover",
+						run_trials(data_=data, solver="cplex", type="QKP",symmetric=False, method="glover",
 							size=size+5,den=density, multiple=mult, options=opt, glover_bounds=bound, glover_cons=con, mixed_sign=False)
 
 
@@ -211,7 +236,7 @@ if __name__=="__main__":
 				for bound in bounds:
 					print("running-(size-{}, density-{}, type-{}, bound-{}, cons-{},symmetric-{},options-{})".format(
 							size,density,"KQKP","tight",0,False,opt))
-					run_trials(data_=data, trials=num_trials, solver="cplex", type="KQKP",symmetric=False, method="glover",
+					run_trials(data_=data, solver="cplex", type="KQKP",symmetric=False, method="glover",
 						size=size+5,den=density, multiple=1, options=opt, glover_bounds=bound, glover_cons=con, mixed_sign=False)
 
 
@@ -220,7 +245,7 @@ if __name__=="__main__":
 		for opt in options:
 			print("running-(size-{}, density-{}, type-{}, bound-{}, cons-{},symmetric-{},options-{})".format(
 					size,density,"UQP","tight",0,False,opt))
-			run_trials(data_=data, trials=num_trials, solver="cplex", type="UQP",symmetric=False, method="glover",
+			run_trials(data_=data, solver="cplex", type="UQP",symmetric=False, method="glover",
 				size=size+5,den=density, multiple=1, options=opt, glover_bounds="org", glover_cons=con)
 
 
@@ -230,7 +255,7 @@ if __name__=="__main__":
 			for bound in bounds:
 				print("running-(size-{}, density-{}, type-{}, bound-{}, cons-{}, symmetric-{}, options-{})".format(
 						size,density,"HSP","tight",0,False,opt))
-				run_trials(data_=data, trials=num_trials, solver="cplex", type="HSP",symmetric=False, method="glover",
+				run_trials(data_=data, solver="cplex", type="HSP",symmetric=False, method="glover",
 					size=size+5,den=density, multiple=1, options=opt, glover_bounds=bound, glover_cons="sub1")
 
 	# qsap_set = ((12,6),(15,5),(18,4),(22,3))
@@ -244,31 +269,4 @@ if __name__=="__main__":
 
 
 	end = timer()
-	print("\ntook {:.3} seconds to run all trials".format(end-start))
-
-	# num_trials = 5
-	# sizes = [80,90,100,110]
-	# densities = [75,100]
-	# solvers = ["cplex", "xpress", "gurobi"]
-	# types = ["QKP"]
-	# methods = ["std", "elf", "glover", "ss_linear_formulation", "no_lin"]
-	# bounds = ["tight"]
-	# cons = ["sub1"]
-	# signs = [False]
-	# multiples = [1]
-	# symmetric = [False]
-	# data = []
-	# for j in densities:
-	# 	for sign in signs:
-	# 		for i in sizes:
-	# 			for solve_with in solvers:
-	# 				for type in types:
-	# 					for bound in bounds:
-	# 						for con in cons:
-	# 							for method in methods:
-	# 								for mult in multiples:
-	# 									for sym in symmetric:
-	# 										print("running-(solver-{}, size-{}, density-{}, type-{}, method-{}, bound-{}, cons-{}, mixed_sign-{}, multiple-{}, symmetric-{})".format(
-	# 											solve_with.upper(),i,j,type,method,bound,con,sign,mult,sym))
-	# 										run_trials(data_=data,trials=num_trials, solver=solve_with, type=type,method=method, symmetric=sym,
-	# 											glover_bounds=bound, glover_cons=con, size=i, den=j, multiple=mult, options=0, reorder=False, mixed_sign=sign)
+	print("\n\nDONE. TOOK {:.3} SECONDS TO RUN ALL TRIALS".format(end-start))

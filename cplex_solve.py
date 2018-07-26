@@ -3,7 +3,7 @@ import numpy as np
 from timeit import default_timer as timer
 from docplex.mp.model import Model
 
-def standard_linearization(quad, lhs_constraints=True, **kwargs):
+def standard_linearization(quad, lhs_constraints=False, **kwargs):
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -615,7 +615,7 @@ def ss_linear_formulation(quad, **kwargs):
 	bound_m.end()
 	end = timer()
 	setup_time = end-start
-	
+
 	#add auxiliary constraints
 	for i in range(n):
 		m.add_constraint(sum(C[i,j]*x[j] for j in range(n))-s[i]-L[i]==y[i])
@@ -630,7 +630,7 @@ def ss_linear_formulation(quad, **kwargs):
 	#return model + setup time
 	return [m, setup_time]
 
-def qsap_standard(qsap, **kwargs):
+def qsap_standard(qsap, lhs_constraints=False, **kwargs):
 	n = qsap.n
 	m = qsap.m
 	e = qsap.e
@@ -645,15 +645,24 @@ def qsap_standard(qsap, **kwargs):
 	mdl.add_constraints((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
 
 	#add auxiliary constraints
-	#TODO implement lhs here?
 	for i in range(m-1):
 		for k in range(n):
 			for j in range(i+1,m):
 				for l in range(n):
-					mdl.add_constraint(w[i,k,j,l] <= x[i,k])
-					mdl.add_constraint(w[i,k,j,l] <= x[j,l])
-					mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
-					mdl.add_constraint(w[i,k,j,l] >= 0)
+					if lhs_constraints:
+						mdl.add_constraint(w[i,k,j,l] <= x[i,k])
+						mdl.add_constraint(w[i,k,j,l] <= x[j,l])
+						mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+						mdl.add_constraint(w[i,k,j,l] >= 0)
+					else:
+						if c[i,k,j,l] > 0:
+							mdl.add_constraint(w[i,k,j,l] <= x[i,k])
+							mdl.add_constraint(w[i,k,j,l] <= x[j,l])
+						else:
+							mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+							mdl.add_constraint(w[i,k,j,l] >= 0)
+
+
 
 	#compute quadratic values contirbution to obj
 	quadratic_values = 0
@@ -661,7 +670,7 @@ def qsap_standard(qsap, **kwargs):
 		for j in range(i+1,m):
 			for k in range(n):
 				for l in range(n):
-					quadratic_values = quadratic_values + (c[i,k,j,l]*(w[i,k,j,l]))
+					quadratic_values = quadratic_values + ((c[i,k,j,l]+c[j,l,i,k])*(w[i,k,j,l]))
 
 	linear_values = mdl.sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
 	mdl.maximize(linear_values + quadratic_values)
@@ -692,7 +701,7 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	L1 = np.zeros((m,n))
 	start = timer()
 	if bounds=="original":
-		for i in range(m-1):
+		for i in range(m):
 			for k in range(n):
 				col = c[i,k,:,:]
 				pos_take_vals = col > 0
@@ -716,17 +725,17 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 		elif bounds == "tighter":
 			bound_x = bound_mdl.binary_var_matrix(keys1=m,keys2=n)
 		bound_mdl.add_constraints((sum(bound_x[i,k] for k in range(n)) == 1) for i in range(m))
-		for i in range(m-1):
+		for i in range(m):
 			for k in range(n):
 				# solve for upper bound U1
-				bound_mdl.set_objective(sense="max", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)))
+				bound_mdl.set_objective(sense="max", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
 				u_con = bound_mdl.add_constraint(bound_x[i,k]==1)
 				bound_mdl.solve()
 				bound_mdl.remove_constraint(u_con)
 				U1[i,k] = bound_mdl.objective_value
 
 				# solve for lower bound L0
-				bound_mdl.set_objective(sense="min", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)))
+				bound_mdl.set_objective(sense="min", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
 				l_con = bound_mdl.add_constraint(bound_x[i,k]==0)
 				bound_mdl.solve()
 				bound_mdl.remove_constraint(l_con)
@@ -734,14 +743,14 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 
 				if lhs_constraints:
 					# solve for upper bound U0
-					bound_mdl.set_objective(sense="max", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)))
+					bound_mdl.set_objective(sense="max", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
 					u_con = bound_mdl.add_constraint(bound_x[i,k] == 0)
 					bound_mdl.solve()
 					bound_mdl.remove_constraint(u_con)
 					U0[i,k] = bound_mdl.objective_value
 
 					# solve for lower bound L1
-					bound_mdl.set_objective(sense="min", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)))
+					bound_mdl.set_objective(sense="min", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
 					l_con = bound_mdl.add_constraint(bound_x[i,k] == 1)
 					bound_mdl.solve()
 					L1[i,k] = bound_mdl.objective_value
@@ -753,18 +762,23 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	end = timer()
 	setup_time = end-start
 
+	# for i in range(m):
+	# 	for j in range(n):
+	# 		U1[i,j] = 1000
+	# 		L0[i,j] = -1000
+
 	#add auxiliary constrains
 	if constraints=="original":
 		z = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=-mdl.infinity)
-		mdl.add_constraints(z[i,k] <= x[i,k]*U1[i,k] for i in range(m-1) for k in range(n))
-		mdl.add_constraints(z[i,k] <= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
-										-L0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
+		mdl.add_constraints(z[i,k] <= x[i,k]*U1[i,k] for i in range(m) for k in range(n))
+		mdl.add_constraints(z[i,k] <= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+										-L0[i,k]*(1-x[i,k]) for i in range(m) for k in range(n))
 		if lhs_constraints:
 			mdl.add_constraints(z[i,k] >= x[i,k]*L1[i,k] for i in range(m-1) for k in range(n))
 			mdl.add_constraints(z[i,k] >= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
 										-U0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
 		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
-					+ sum(sum(z[i,k] for k in range(n)) for i in range(m-1)))
+					+ sum(sum(z[i,k] for k in range(n)) for i in range(m)))
 	elif constraints=="sub1":
 		s = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=0)
 		mdl.add_constraints(s[i,k] >= U1[i,k]*x[i,k]+L0[i,k]*(1-x[i,k])-sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
@@ -899,22 +913,22 @@ def no_linearization(quad, **kwargs):
 
 	return [m, 0]
 
-def solve_model(model, solve_relax=True, **kwargs):
+def solve_model(model, solve_relax=True, time_limit=3600, **kwargs):
 	#use with block to automatically call m.end() when finished
 	with model as m:
-		time_limit = False
-		m.set_time_limit(6000)
+		hit_time_limit = False
+		m.set_time_limit(time_limit)
 		start = timer()
 		m.solve()
 		end = timer()
 		if("FEASIBLE" in str(m.get_solve_status())):
 			print('time limit exceeded')
-			time_limit=True
+			hit_time_limit=True
 		solve_time = end-start
 		objective_value = m.objective_value
 		#print(objective_value)
 
-		if solve_relax and not time_limit:
+		if solve_relax and not hit_time_limit:
 			#compute continuous relaxation and integrality_gap
 			i = 0
 			while m.get_var_by_name("binary_var_"+str(i)) is not None:
@@ -948,5 +962,5 @@ def solve_model(model, solve_relax=True, **kwargs):
 				"objective_value":objective_value,
 				"relaxed_solution":continuous_obj_value,
 				"integrality_gap":integrality_gap,
-				"time_limit":time_limit}
+				"time_limit":hit_time_limit}
 	return results

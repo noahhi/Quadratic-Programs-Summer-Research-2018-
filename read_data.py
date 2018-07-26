@@ -156,8 +156,7 @@ def make_line_graph(dfs, save_loc, variable, formulations):
 			unique_sizes = form_rows["size"].unique()
 			unique_sizes.sort()
 			for size in unique_sizes:
-				corresponding_density = form_rows[form_rows["size"] == size]["density"].unique()[
-					0]
+				corresponding_density = form_rows[form_rows["size"] == size]["density"].unique()[0]
 				labels.append((size, corresponding_density))
 				size_data = form_rows[form_rows["size"] == size]
 				size_time = size_data["instance_total_time"].tolist()
@@ -185,8 +184,8 @@ def analyze(df_name, new_folder_name, test_variable, formulations, specification
 	df = pd.read_pickle("dataframes/{}.pkl".format(df_name))
 
 	# uncomment this to replace values that should be NaN
-	mask = df["instance_total_time"] > 600	# ~where 600 was timelimit
-	df.loc[mask, "instance_total_time"] = np.nan
+	#mask = df["instance_total_time"] > 600	# ~where 600 was timelimit
+	#df.loc[mask, "instance_total_time"] = np.nan
 
 	# df = df[:-5]	 #--use this to cut off (5) rows from end if uneven length
 	#df = df[df["density"]==50]
@@ -276,8 +275,8 @@ specifications: dictionary of str:list. used to specify which subgraphs to gener
 """
 
 specs = {"density":[25,50,75,100], "type":["QKP", "KQKP", "HSP"]}
-analyze(df_name='batch3_reorder_smaller', new_folder_name='test', specifications=specs,
-   test_variable="options", formulations=[0,1,2,3,4])
+analyze(df_name='batch3_reorder_notimelimit', new_folder_name='test1', specifications=specs,
+   test_variable="options", formulations=[0,1,2,3,4], look_at="instance_total_time")
 
 # df = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_smaller"))
 # df2 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder"))

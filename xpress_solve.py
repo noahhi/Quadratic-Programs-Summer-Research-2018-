@@ -5,7 +5,9 @@ import sys
 sys.path.insert(0,"c:/xpressmp/bin")
 import xpress as xp
 
-#xp.addcbmsghandler(None,"xpress.log",0)
+# this turns off all console/log file output
+xp.controls.outputlog=0
+# m.setlogfile("xpress.log") #~~ if you want a log file for particular model
 
 def standard_linearization(quad, lhs_constraints=True, **kwargs):
 	n = quad.n
@@ -383,12 +385,14 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 	m = rlt1_linearization(quad)
 	start = timer()
 	m[0].solve()
-	d = m[0].getDual()
+	#print("RLT solution")
+	#print(m[0].getObjVal())     #this should be continuous relax solution to glover_ext.
+
+	# Retrieve Duals
+	d = m[0].getDual()  # getDual() returns a list with ALL duals
 	con16indices = m[1]
 	con17indices = m[2]
-	print(m[0].getObjVal())     #this should be continuous relax solution to glover_ext.
-	con16duals = d[con16indices[0]:con16indices[-1]+1]
-	#con17duals = d[con17indices[0]:con17indices[-1]+1]
+	con16duals = [d[index] for index in con16indices]
 	con17duals = [d[index] for index in con17indices]
 
 	duals16 = np.zeros((n, n))
@@ -695,15 +699,22 @@ def qsap_standard(qsap, **kwargs):
 	mdl.addConstraint((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
 
 	#add auxiliary constraints
-	#TODO implement lhs here?
 	for i in range(m-1):
 		for k in range(n):
 			for j in range(i+1,m):
 				for l in range(n):
-					mdl.addConstraint(w[i,k,j,l] <= x[i,k])
-					mdl.addConstraint(w[i,k,j,l] <= x[j,l])
-					mdl.addConstraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
-					mdl.addConstraint(w[i,k,j,l] >= 0)
+					if lhs_constraints:
+						mdl.add_constraint(w[i,k,j,l] <= x[i,k])
+						mdl.add_constraint(w[i,k,j,l] <= x[j,l])
+						mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+						mdl.add_constraint(w[i,k,j,l] >= 0)
+					else:
+						if c[i,k,j,l] > 0:
+							mdl.add_constraint(w[i,k,j,l] <= x[i,k])
+							mdl.add_constraint(w[i,k,j,l] <= x[j,l])
+						else:
+							mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+							mdl.add_constraint(w[i,k,j,l] >= 0)
 
 	#compute quadratic values contirbution to obj
 	quadratic_values = 0
@@ -964,27 +975,25 @@ def no_linearization(quad, **kwargs):
 	setup_time = end-start
 	return [m, setup_time]
 
-def solve_model(m, solve_relax=True, **kwargs):
+def solve_model(m, solve_relax=True, time_limit=3600, **kwargs):
 	"""
 	Takes in an unsolved gurobi model of a MIP. Solves it as well as continuous
 	relaxation and returns a dictionary containing relevant solve details
 	"""
-	# turn off model output. otherwise prints bunch of info, clogs console
-	m.setlogfile("xpress.log")
-	time_limit = False
+	hit_time_limit = False
 	# start timer and solve model
-	m.controls.maxtime = 600
+	m.controls.maxtime = time_limit
 	start = timer()
 	m.solve()
 	end = timer()
 	if("optimal" not in str(m.getProbStatusString())):
 		print('time limit exceeded')
-		time_limit=True
+		hit_time_limit=True
 	solve_time = end-start
 	objective_value = m.getObjVal()
 
 
-	if solve_relax and not time_limit:
+	if solve_relax and not hit_time_limit:
 		# relax and solve to get continuous relaxation and integrality_gap
 		#cols = []
 		#m.getcoltype(cols,0,m.attributes.cols-1)
@@ -1014,5 +1023,5 @@ def solve_model(m, solve_relax=True, **kwargs):
 			   "objective_value": objective_value,
 			   "relaxed_solution": continuous_obj_value,
 			   "integrality_gap": integrality_gap,
-				"time_limit":time_limit}
+				"time_limit":hit_time_limit}
 	return results

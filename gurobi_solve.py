@@ -364,9 +364,9 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 	start = timer()
 	m.optimize()
 
-	print()
-	print("RLT objective value = " + str(m.objVal))
-	print()
+	# print()
+	# print("RLT objective value = " + str(m.objVal))
+	# print()
 
 	# Obtain the duals to the symmetry constraints
 	duals16 = np.zeros((n,n))
@@ -653,15 +653,22 @@ def qsap_standard(qsap, **kwargs):
 	mdl.addConstrs((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
 
 	#add auxiliary constraints
-	#TODO implement lhs here?
 	for i in range(m-1):
 		for k in range(n):
 			for j in range(i+1,m):
 				for l in range(n):
-					mdl.addConstr(w[i,k,j,l] <= x[i,k])
-					mdl.addConstr(w[i,k,j,l] <= x[j,l])
-					mdl.addConstr(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
-					mdl.addConstr(w[i,k,j,l] >= 0)
+					if lhs_constraints:
+						mdl.add_constraint(w[i,k,j,l] <= x[i,k])
+						mdl.add_constraint(w[i,k,j,l] <= x[j,l])
+						mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+						mdl.add_constraint(w[i,k,j,l] >= 0)
+					else:
+						if c[i,k,j,l] > 0:
+							mdl.add_constraint(w[i,k,j,l] <= x[i,k])
+							mdl.add_constraint(w[i,k,j,l] <= x[j,l])
+						else:
+							mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+							mdl.add_constraint(w[i,k,j,l] >= 0)
 
 	#compute quadratic values contirbution to obj
 	quadratic_values = 0
@@ -912,26 +919,26 @@ def no_linearization(quad, **kwargs):
 	setup_time = end-start
 	return [m, setup_time]
 
-def solve_model(m, solve_relax=True, **kwargs):
+def solve_model(m, solve_relax=True, time_limit=3600, **kwargs):
 	"""
 	Takes in an unsolved gurobi model of a MIP. Solves it as well as continuous
 	relaxation and returns a dictionary containing relevant solve details
 	"""
 	# turn off model output. otherwise prints bunch of info, clogs console
 	#m.setParam('OutputFlag', 0)
-	time_limit = False
-	m.setParam('TimeLimit',600)
+	hit_time_limit = False
+	m.setParam('TimeLimit',time_limit)
 	# start timer and solve model
 	start = timer()
 	m.optimize()
 	end = timer()
 	if(m.status == 9):
 		print('time limit exceeded')
-		time_limit=True
+		hit_time_limit=True
 	solve_time = end-start
 	objective_value = m.objVal
 
-	if solve_relax and not time_limit:
+	if solve_relax and not hit_time_limit:
 		# relax and solve to get continuous relaxation and integrality_gap
 		vars = m.getVars()
 		for var in vars:
@@ -953,5 +960,5 @@ def solve_model(m, solve_relax=True, **kwargs):
 			   "objective_value": objective_value,
 			   "relaxed_solution": continuous_obj_value,
 			   "integrality_gap": integrality_gap,
-				"time_limit":time_limit}
+				"time_limit":hit_time_limit}
 	return results

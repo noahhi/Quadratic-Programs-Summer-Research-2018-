@@ -4,7 +4,8 @@ import sys
 from docplex.mp.model import Model
 from timeit import default_timer as timer
 
-
+#copy of cplex glovers used for refined_reorder method
+#NOTE: trying to import cplex --> circular import errors 
 def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False, solve_continuous=False, **kwargs):
 	n = quad.n
 	c = quad.c
@@ -109,7 +110,6 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 				l_con = l_bound_m.add_constraint(l_bound_x[j] == 1)
 				u_bound_m.solve()
 				if "OPTIMAL_SOLUTION" not in str(u_bound_m.get_solve_status()):
-					# TODO double check optimal sol result w/ std lin
 					#print(str(u_bound_m.get_solve_status()) + " when solving for upper bound (U0)")
 					u_bound_m.remove_constraint(u_con)
 					u_bound_m.add_constraint(u_bound_x[j] == 1)
@@ -261,68 +261,11 @@ class Quadratic:  # base class for all quadratic problem types
 			for j in range(self.m):
 				self.a[j] = [self.a[j][i] for i in new_order]
 
-	def reorder_refinedtest(self, k, take_max=False, flip_order=False):
-		n = self.n
-		c = self.c
-		C = self.C
-		a = self.a
-		b = self.b
-
-		# start by applying the original reorder method
-		self.reorder()
-
-		for iter in range(k):
-			# model and solve continuous relax
-			m = Model(name='glovers_linearization_')
-			x = m.continuous_var_list(n, name="decision_var", ub=1)
-
-			if type(self) is Knapsack:	# HSP and UQP don't have cap constraint
-				# add capacity constraint(s)
-				for k in range(self.m):
-					m.add_constraint(m.sum(x[i]*a[k][i]
-										   for i in range(n)) <= b[k])
-
-				# k_item constraint if necessary (if KQKP or HSP)
-				if self.num_items > 0:
-					m.add_constraint(m.sum(x[i]
-										   for i in range(n)) == self.num_items)
-
-			U1 = np.zeros(n)
-			L0 = np.zeros(n)
-			for j in range(n):
-				col = C[:, j]
-				pos_take_vals = col > 0
-				pos_take_vals[j] = True
-				U1[j] = np.sum(col[pos_take_vals])
-				neg_take_vals = col < 0
-				neg_take_vals[j] = False
-				L0[j] = np.sum(col[neg_take_vals])
-
-			# original glovers constraints
-			z = m.continuous_var_list(keys=n, lb=-m.infinity)
-			m.add_constraints(z[j] <= U1[j]*x[j] for j in range(n))
-			for j in range(n):
-				tempsum = sum(self.C[i, j]*x[i] for i in range(n))
-				m.add_constraint(z[j] <= tempsum - L0[j]*(1-x[j]))
-			m.maximize(m.sum(self.c[j]*x[j] + z[j] for j in range(n)))
-			m.solve()
-			# print(m.solution)
-			value_matrix = np.zeros((n, n))
-			for i in range(n-1):
-				for j in range(i+1, n):
-					value_matrix[i, j] = self.C[i, j]*m.get_var_by_name("decision_var_"+str(
-						i)).solution_value*m.get_var_by_name("decision_var_"+str(j)).solution_value
-					if self.C[i, j] < 0:
-						value_matrix[i, j] = value_matrix[i, j]*-1
-					value_matrix[j, i] = value_matrix[i, j]
-			# print(value_matrix)
-			self.reorder(vm=value_matrix)
-
 	def reorder_refined(self, k, take_max=False, flip_order=False):
 		n = self.n
 
 		# start by applying the original reorder method
-		self.reorder()
+		self.reorder(take_max=take_max, flip_order=flip_order)
 
 		for iter in range(k):
 			# model and solve continuous relax
@@ -337,7 +280,7 @@ class Quadratic:  # base class for all quadratic problem types
 					if self.C[i, j] < 0:
 						value_matrix[i, j] = value_matrix[i, j]*-1
 					value_matrix[j, i] = value_matrix[i, j]
-			self.reorder(vm=value_matrix)
+			self.reorder(vm=value_matrix, take_max=take_max, flip_order=flip_order)
 
 
 class Knapsack(Quadratic):	# includes QKP, KQKP, QMKP
@@ -485,7 +428,7 @@ class QSAP:	 # quadratic semi assignment problem
 						self.c[i, k, j, l] = np.random.randint(-50, 51)
 						if symmetric:
 							self.c[i, k, j, l] = self.c[i, k, j, l]*0.5
-							self.c[j, k, i, l] = self.c[i, k, j, l]
+							self.c[j, l, i, k] = self.c[i, k, j, l]
 
 	def reorder(self, take_max=False, flip_order=False):
 		C = self.c
@@ -561,10 +504,3 @@ class QSAP:	 # quadratic semi assignment problem
 		# apply reordering to linear terms matrix
 		e = np.array([e[i, k] for (i, k) in new_order]).reshape(m, n)
 		self.e = e
-
-
-# p = QSAP(n=3,m=3)
-# print(p.c)
-# p.reorder()
-# print('\n\n')
-# print(p.c)
