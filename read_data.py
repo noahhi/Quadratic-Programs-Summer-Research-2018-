@@ -21,12 +21,12 @@ def write_report(df, save_loc):
 	workbook = writer.book
 	worksheet = writer.sheets['Sheet1']
 	worksheet.conditional_format(
-		'P2:P5000', {'type': '3_color_scale', 'min_color': 'green', 'max_color': 'red'})
+		'Q2:Q5000', {'type': '3_color_scale', 'min_color': 'green', 'max_color': 'red'})
 
 	writer.save()
 
 
-def performance_profile(df, save_loc, variable, formulations):
+def performance_profile(df, save_loc, variable, formulations, look_at="instance_total_time"):
 	"""
 	Creates a performance profile graph
 
@@ -40,7 +40,7 @@ def performance_profile(df, save_loc, variable, formulations):
 	for form in formulations:
 		form_rows = df[df[variable] == form]
 		# chose from "instance_total_time", "instance_solve_time", "instance_setup_time", "instance_gap"
-		form_data = form_rows["instance_total_time"].tolist()
+		form_data = form_rows[look_at].tolist()
 		data[form] = form_data
 	df = pd.DataFrame(data)
 
@@ -91,14 +91,14 @@ def performance_profile(df, save_loc, variable, formulations):
 	plt.close()
 
 
-def make_bar_graph(df, save_loc, variable, formulations):
+def make_bar_graph(df, save_loc, variable, formulations, look_at="instance_total_time"):
 	"""
 	Creates a bar graph showing average solve times for each formulation. good complement to performance profile
 	"""
 	for form in formulations:
 		# retrieve times for formulation
 		form_rows = df[df[variable] == form]
-		form_data = form_rows["instance_total_time"].tolist()
+		form_data = form_rows[look_at].tolist()
 
 		# plot formulation's average solve time
 		bar = plt.bar(form, np.nanmean(form_data))[0]
@@ -169,7 +169,7 @@ def make_line_graph(dfs, save_loc, variable, formulations):
 	plt.show()
 
 
-def analyze(df_name, new_folder_name, test_variable, formulations, specifications=None):
+def analyze(df_name, new_folder_name, test_variable, formulations, specifications=None, look_at="instance_total_time"):
 	"""
 	Generates a suite of performance profiles, graphs, and excel spreadsheets for analysis of a dataset. This is the only
 	method in this module which needs to be called
@@ -202,10 +202,10 @@ def analyze(df_name, new_folder_name, test_variable, formulations, specification
 		write_report(df, save_loc=mypath+"/aggregate/")
 		# generate a performance profile graph for the aggregated data
 		performance_profile(df, save_loc=mypath+"/aggregate/aggregate_",
-							variable=test_variable, formulations=formulations)
+							variable=test_variable, formulations=formulations, look_at=look_at)
 		# generate a bar graph showing solve times for the aggregated data
 		make_bar_graph(df, save_loc=mypath+"/aggregate/aggregate_",
-					   variable=test_variable, formulations=formulations)
+					   variable=test_variable, formulations=formulations, look_at=look_at)
 
 		if specifications is None:
 			return
@@ -216,10 +216,10 @@ def analyze(df_name, new_folder_name, test_variable, formulations, specification
 				sub_df = df[df[key] == value]
 				# generate a performance profile graph
 				performance_profile(sub_df, save_loc=mypath+"/by_"+key+"/"+key+"_"+str(
-					value)+"_", variable=test_variable, formulations=formulations)
+					value)+"_", variable=test_variable, formulations=formulations, look_at=look_at)
 				# generate a bar graph showing solve times
 				make_bar_graph(sub_df, save_loc=mypath+"/by_"+key+"/"+key+"_" +
-							   str(value)+"_", variable=test_variable, formulations=formulations)
+							   str(value)+"_", variable=test_variable, formulations=formulations, look_at=look_at)
 	else:
 		raise Exception("Save path folder {} already exists. ".format(mypath))
 
@@ -272,11 +272,13 @@ corresponding formulation options:
 	glover_bounds : ['original', 'tight', 'tighter']
 	glover_cons : ['original', 'sub1', 'sub2']
 specifications: dictionary of str:list. used to specify which subgraphs to generate (ie. to only look at data from 50% dense)
+look_at: (y axis for graph) ~ {'instance_total_time', 'instance_gap'}
+ (could also look at instance_setup_time, or instance_solve_time not including setup)
 """
 
 specs = {"density":[25,50,75,100], "type":["QKP", "KQKP", "HSP"]}
-analyze(df_name='batch3_reorder_notimelimit', new_folder_name='test1', specifications=specs,
-   test_variable="options", formulations=[0,1,2,3,4], look_at="instance_total_time")
+analyze(df_name='test', new_folder_name='test1', specifications=specs,
+   test_variable="options", formulations=[5,6,7,8], look_at="instance_total_time")
 
 # df = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_smaller"))
 # df2 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder"))

@@ -776,7 +776,7 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	U0 = np.zeros((m,n))
 	L1 = np.zeros((m,n))
 	if bounds=="original":
-		for i in range(m-1):
+		for i in range(m):
 			for k in range(n):
 				col = c[i,k,:,:]
 				pos_take_vals = col > 0
@@ -802,16 +802,16 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 			bound_x = np.array([xp.var(vartype=xp.binary, lb=0, ub=1) for i in range(m) for j in range(n)]).reshape(m,n)
 		bound_mdl.addVariable(bound_x)
 		bound_mdl.addConstraint((xp.Sum(bound_x[i,k] for k in range(n)) == 1) for i in range(m))
-		for i in range(m-1):
+		for i in range(m):
 			for k in range(n):
-				bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.maximize)
+				bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)), sense=xp.maximize)
 				u_con = bound_x[i,k] == 1
 				bound_mdl.addConstraint(u_con)
 				bound_mdl.solve()
 				bound_mdl.delConstraint(u_con)
 				U1[i,k] = bound_mdl.getObjVal()
 
-				bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.minimize)
+				bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)), sense=xp.minimize)
 				l_con = bound_x[i,k] == 0
 				bound_mdl.addConstraint(l_con)
 				bound_mdl.solve()
@@ -819,14 +819,14 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 				L0[i,k] = bound_mdl.getObjVal()
 
 				if lhs_constraints:
-					bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.maximize)
+					bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)), sense=xp.maximize)
 					u_con = bound_x[i,k] == 0
 					bound_mdl.addConstraint(u_con)
 					bound_mdl.solve()
 					bound_mdl.delConstraint(u_con)
 					U0[i,k] = bound_mdl.getObjVal()
 
-					bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(i+1,m)), sense=xp.minimize)
+					bound_mdl.setObjective(xp.Sum(xp.Sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)), sense=xp.minimize)
 					l_con = bound_x[i,k] == 1
 					bound_mdl.addConstraint(l_con)
 					bound_mdl.solve()
@@ -839,30 +839,30 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	if constraints=="original":
 		z = np.array([xp.var(vartype=xp.continuous, lb=-xp.infinity) for i in range(m) for j in range(n)]).reshape(m,n)
 		mdl.addVariable(z)
-		mdl.addConstraint(z[i,k] <= x[i,k]*U1[i,k] for i in range(m-1) for k in range(n))
-		mdl.addConstraint(z[i,k] <= xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
-										-L0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
+		mdl.addConstraint(z[i,k] <= x[i,k]*U1[i,k] for i in range(m) for k in range(n))
+		mdl.addConstraint(z[i,k] <= xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+										-L0[i,k]*(1-x[i,k]) for i in range(m) for k in range(n))
 		if lhs_constraints:
-			mdl.addConstraint(z[i,k] >= x[i,k]*L1[i,k] for i in range(m-1) for k in range(n))
-			mdl.addConstraint(z[i,k] >= xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
-										-U0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
+			mdl.addConstraint(z[i,k] >= x[i,k]*L1[i,k] for i in range(m) for k in range(n))
+			mdl.addConstraint(z[i,k] >= xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+										-U0[i,k]*(1-x[i,k]) for i in range(m) for k in range(n))
 		mdl.setObjective(xp.Sum(xp.Sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
-					+ xp.Sum(xp.Sum(z[i,k] for k in range(n)) for i in range(m-1)), sense=xp.maximize)
+					+ xp.Sum(xp.Sum(z[i,k] for k in range(n)) for i in range(m)), sense=xp.maximize)
 	elif constraints=="sub1":
 		s = np.array([xp.var(vartype=xp.continuous, lb=0) for i in range(m) for j in range(n)]).reshape(m,n)
 		mdl.addVariable(s)
-		mdl.addConstraint(s[i,k] >= U1[i,k]*x[i,k]+L0[i,k]*(1-x[i,k])-xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
-						for k in range(n) for i in range(m-1))
+		mdl.addConstraint(s[i,k] >= U1[i,k]*x[i,k]+L0[i,k]*(1-x[i,k])-xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+						for k in range(n) for i in range(m))
 		mdl.setObjective(xp.Sum(xp.Sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
-					+ xp.Sum(xp.Sum(U1[i,k]*x[i,k]-s[i,k] for k in range(n)) for i in range(m-1)), sense=xp.maximize)
+					+ xp.Sum(xp.Sum(U1[i,k]*x[i,k]-s[i,k] for k in range(n)) for i in range(m)), sense=xp.maximize)
 	elif constraints=="sub2":
 		s = np.array([xp.var(vartype=xp.continuous, lb=0) for i in range(m) for j in range(n)]).reshape(m,n)
 		mdl.addVariable(s)
-		mdl.addConstraint(s[i,k] >= -L0[i,k]*(1-x[i,k])-(x[i,k]*U1[i,k])+xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
-		 				for k in range(n) for i in range(m-1))
+		mdl.addConstraint(s[i,k] >= -L0[i,k]*(1-x[i,k])-(x[i,k]*U1[i,k])+xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+		 				for k in range(n) for i in range(m))
 		mdl.setObjective(xp.Sum(xp.Sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
 					+ xp.Sum(xp.Sum(-s[i,k]-(L0[i,k]*(1-x[i,k])) + xp.Sum(xp.Sum(c[i,k,j,l]*x[j,l] for l in range(n))
-					for j in range(i+1,m)) for k in range(n)) for i in range(m-1)), sense=xp.maximize)
+					for j in range(m)) for k in range(n)) for i in range(m)), sense=xp.maximize)
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 

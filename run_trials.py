@@ -11,7 +11,8 @@ TIME_LIMIT = 3600
 DATAFRAME_NAME = "test"
 NUM_TRIALS = 10
 
-def run_trials(data_, solver="cplex",type="QKP",reorder=False,symmetric=False,
+#TODO reorder should be false by default
+def run_trials(data_, solver="cplex",type="QKP",reorder=True,symmetric=False,
 			method="std",size=5,multiple=1,den=100, options=0,glover_bounds="tight", glover_cons="original",mixed_sign=False):
 	"""
 	Runs a set of trials on a given problem formulation
@@ -68,9 +69,13 @@ def run_trials(data_, solver="cplex",type="QKP",reorder=False,symmetric=False,
 				elif options==4:
 					quad.reorder(take_max=True, flip_order=True)
 				elif options==5:
-					quad.reorder_refined(take_max=False, flip_order=False)
+					quad.reorder_refined(take_max=False, flip_order=False, k=3)
 				elif options==6:
-					quad.reorder_refined(take_max=True, flip_order=True)
+					quad.reorder_refined(take_max=True, flip_order=True, k=3)
+				elif options==7:
+					quad.reorder_refined(take_max=False, flip_order=False, k=5)
+				elif options==8:
+					quad.reorder_refined(take_max=True, flip_order=True, k=5)
 			reorder_time = timer() - start_reorder
 
 			def get_solver(solver_):
@@ -189,7 +194,7 @@ if __name__=="__main__":
 	data = [] # this list will be filled with dictionaries containing all run_stats; used to make dataframes
 
 	# run trials constants
-	NUM_TRIALS = 3 # number of instances of each formulation to generate and solve
+	NUM_TRIALS = 5 # number of instances of each formulation to generate and solve
 	TIME_LIMIT = 3600 # max amount of time (seconds) to spend on each problem
 	DATAFRAME_NAME = "test" # dataframe will save to \dataframes\DATAFRAME_NAME
 
@@ -207,12 +212,27 @@ if __name__=="__main__":
 	SIZES = []
 	DENSITIES = []
 
+	for solver in SOLVERS:
+		for size in SIZES:
+			for density in DENSITIES:
+				for type in TYPES:
+					for order in REORDER:
+						for sign in MIXED_SIGN:
+							for method in METHODS:
+								for bound in BOUNDS:
+									for constraint in CONSTRAINTS:
+										for opt in OPTIONS:
+											for mult in MULTIPLE:
+												print("running-(solver-{},size-{},density-{},type-{},reorder-{},sign-{},method-{},bound-{},con-{},opt-{},m-{})"
+													.format(solver,size,density,type,order,sign,method,bound,constraint, ))
+												run_trials()
+
 	start = timer() # record total time taken by running trials
 
 	symmetry = [False]
 	cons = ["sub1"]
 	bounds = ["tight"]
-	options = (0,1,2,3,4)
+	options = (0,5,6,7,8)
 
 	qkp_set = ((25,70),(50,60),(75,50),(100,40))
 	multiples = (1,5,10)
@@ -249,7 +269,7 @@ if __name__=="__main__":
 				size=size+5,den=density, multiple=1, options=opt, glover_bounds="org", glover_cons=con)
 
 
-	hsp_set = ((25,45),(50,40),(75,35),(100,30)) #30,100 here is the bottleneck
+	hsp_set = ((25,45),(50,35),(75,30),(100,25))
 	for density,size in hsp_set:
 		for opt in options:
 			for bound in bounds:
@@ -269,4 +289,4 @@ if __name__=="__main__":
 
 
 	end = timer()
-	print("\n\nDONE. TOOK {:.3} SECONDS TO RUN ALL TRIALS".format(end-start))
+	print("\n\nDONE. TOOK {:.5} SECONDS TO RUN ALL TRIALS".format(end-start))

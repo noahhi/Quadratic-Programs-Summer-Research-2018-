@@ -5,7 +5,7 @@ from docplex.mp.model import Model
 from timeit import default_timer as timer
 
 #copy of cplex glovers used for refined_reorder method
-#NOTE: trying to import cplex --> circular import errors 
+#NOTE: trying to import cplex --> circular import errors
 def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False, solve_continuous=False, **kwargs):
 	n = quad.n
 	c = quad.c
@@ -431,23 +431,20 @@ class QSAP:	 # quadratic semi assignment problem
 							self.c[j, l, i, k] = self.c[i, k, j, l]
 
 	def reorder(self, take_max=False, flip_order=False):
-		C = self.c
+		#C = self.c
 		n = self.n
 		m = self.m
 		e = self.e
 		# generate value matrix. a symmetric copy of quadratic terms matrix (all positive)
 		value_matrix = np.zeros(shape=(m, n, m, n))
-		neg_mask = np.zeros(shape=(m, n, m, n))
 		for i in range(m-1):
 			for k in range(n):
 				for j in range(i+1, m):
 					for l in range(n):
-						val = C[i, k, j, l]
-						neg_mask[i, k, j, l] = val
-						neg_mask[j, l, i, k] = val
+						val = self.c[i, k, j, l]
 						value_matrix[i, k, j, l] = abs(val)
 						value_matrix[j, l, i, k] = abs(val)
-
+		#print(value_matrix)
 		col_sums = np.zeros((m, n))
 		old_order = []
 		new_order = []
@@ -456,8 +453,7 @@ class QSAP:	 # quadratic semi assignment problem
 			for k in range(n):
 				old_order.append((i, k))
 				# compute 'column' sums. (ie. sum of all j,l terms for an i,k pair)
-				col_sums[i, k] = sum(sum(value_matrix[i, k, j, l]
-										 for j in range(m))for l in range(n))
+				col_sums[i, k] = sum(value_matrix[i, k, j, l] for j in range(m) for l in range(n))
 
 		# find the minimum col_sum, and record its index as the next elem in our new order
 		for i in range(n*m):
@@ -473,10 +469,9 @@ class QSAP:	 # quadratic semi assignment problem
 						minv = v
 						mindex = (x, y)
 			if take_max:
-				col_sums[mindex[0], mindex[1]] = - \
-					sys.maxsize	 # could use sys.maxsize
+				col_sums[mindex[0], mindex[1]] = -sys.maxsize
 			else:
-				# could use sys.maxsize
+				# need to ignore/remove current mindex
 				col_sums[mindex[0], mindex[1]] = sys.maxsize
 			new_order.append(mindex)
 			#map[old_order[i]] = mindex
@@ -484,23 +479,63 @@ class QSAP:	 # quadratic semi assignment problem
 				for k in range(n):
 					# update other terms according to paper
 					col_sums[i, k] -= value_matrix[i, k, mindex[0], mindex[1]]
-			# need to ignore/remove current mindex
+		#print(old_order)
+		print(new_order)
 
 		if flip_order:
 			new_order.reverse()
 
 		for i in range(n*m):
 			map[old_order[i]] = new_order[i]
+		#print("\n\n")
+		#print(map)
 
+		C = np.zeros((m,n,m,n))
+		for (x,y) in new_order:
+			for j in range(m):
+				for l in range(n):
+					C[x,y,j,l] = self.c[j,l,x,y]
+					self.c[j,l,x,y] = 0
+			for j in range(m):
+				for l in range(n):
+					C[x,y,j,l] += self.c[x,y,j,l]
+
+
+					self.c[x,y,j,l] = 0
+
+		self.c = C
 		# apply reordering to quadratic terms matrix
-		for i in range(m-1):
-			for k in range(n):
-				for j in range(i+1, m):
-					for l in range(n):
-						(x1, y1) = map[(i, k)]
-						(x2, y2) = map[(j, l)]
-						C[i, k, j, l] = neg_mask[x1, y1, x2, y2]
+		# for i in range(m):
+		# 	for k in range(n):
+		# 		for j in range(m):
+		# 			for l in range(n):
+		# 				(x1, y1) = map[(i, k)]
+		# 				(x2, y2) = map[(j, l)]
+		# 				C[i, k, j, l] = neg_mask[x1, y1, x2, y2]
 
+						#p.c[1,0,1,1] = -29
+						#p.c[0,0,0,1] = 8
 		# apply reordering to linear terms matrix
-		e = np.array([e[i, k] for (i, k) in new_order]).reshape(m, n)
-		self.e = e
+		#e = np.array([e[i, k] for (i, k) in new_order]).reshape(m,n)
+		#self.e = e
+
+	def reorder_refined(self, k, take_max=False, flip_order=False):
+		n = self.n
+
+		# start by applying the original reorder method
+		self.reorder(take_max=take_max, flip_order=flip_order)
+
+		for iter in range(k):
+			# model and solve continuous relax
+			m = glovers_linearization(
+				self, solve_continuous=True)[0]
+			m.solve()
+			value_matrix = np.zeros((n, n))
+			for i in range(n-1):
+				for j in range(i+1, n):
+					value_matrix[i, j] = self.C[i, j]*m.get_var_by_name("decision_var_"+str(
+						i)).solution_value*m.get_var_by_name("decision_var_"+str(j)).solution_value
+					if self.C[i, j] < 0:
+						value_matrix[i, j] = value_matrix[i, j]*-1
+					value_matrix[j, i] = value_matrix[i, j]
+			self.reorder(vm=value_matrix, take_max=take_max, flip_order=flip_order)

@@ -645,7 +645,7 @@ def ss_linear_formulation(quad, **kwargs):
 	#return model + setup time
 	return [m, setup_time]
 
-def qsap_standard(qsap, lhs_constraints=False, **kwargs):
+def qsap_standard(qsap, lhs_constraints=True, **kwargs):
 	"""
 	standard linearization for the quadratic semi-assignment problem
 	"""
@@ -789,30 +789,30 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	# 		L0[i,j] = -1000
 
 	#add auxiliary constrains
-	if constraints=="original":
+	if constraints=="original": #TODO make sure symmetric works everywhere
 		z = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=-mdl.infinity)
 		mdl.add_constraints(z[i,k] <= x[i,k]*U1[i,k] for i in range(m) for k in range(n))
 		mdl.add_constraints(z[i,k] <= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
 										-L0[i,k]*(1-x[i,k]) for i in range(m) for k in range(n))
 		if lhs_constraints:
-			mdl.add_constraints(z[i,k] >= x[i,k]*L1[i,k] for i in range(m-1) for k in range(n))
-			mdl.add_constraints(z[i,k] >= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
-										-U0[i,k]*(1-x[i,k]) for i in range(m-1) for k in range(n))
+			mdl.add_constraints(z[i,k] >= x[i,k]*L1[i,k] for i in range(m) for k in range(n))
+			mdl.add_constraints(z[i,k] >= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+										-U0[i,k]*(1-x[i,k]) for i in range(m) for k in range(n))
 		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
 					+ sum(sum(z[i,k] for k in range(n)) for i in range(m)))
 	elif constraints=="sub1":
 		s = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=0)
-		mdl.add_constraints(s[i,k] >= U1[i,k]*x[i,k]+L0[i,k]*(1-x[i,k])-sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
-						for k in range(n) for i in range(m-1))
+		mdl.add_constraints(s[i,k] >= U1[i,k]*x[i,k]+L0[i,k]*(1-x[i,k])-sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+						for k in range(n) for i in range(m))
 		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
-					+ sum(sum(U1[i,k]*x[i,k]-s[i,k] for k in range(n)) for i in range(m-1)))
+					+ sum(sum(U1[i,k]*x[i,k]-s[i,k] for k in range(n)) for i in range(m)))
 	elif constraints=="sub2":
 		s = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=0)
-		mdl.add_constraints(s[i,k] >= -L0[i,k]*(1-x[i,k])-(x[i,k]*U1[i,k])+sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(i+1,m))
-		 				for k in range(n) for i in range(m-1))
+		mdl.add_constraints(s[i,k] >= -L0[i,k]*(1-x[i,k])-(x[i,k]*U1[i,k])+sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+		 				for k in range(n) for i in range(m))
 		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
 					+ sum(sum(-s[i,k]-(L0[i,k]*(1-x[i,k])) + sum(sum(c[i,k,j,l]*x[j,l] for l in range(n))
-					for j in range(i+1,m)) for k in range(n)) for i in range(m-1)))
+					for j in range(m)) for k in range(n)) for i in range(m)))
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
@@ -996,3 +996,23 @@ def solve_model(model, solve_relax=True, time_limit=3600, **kwargs):
 				"integrality_gap":integrality_gap,
 				"time_limit":hit_time_limit}
 	return results
+
+
+# p = QSAP(n=3,m=3)
+# print(solve_model(qsap_glovers(p, constraints="original")[0]))
+# p.reorder(take_max=False, flip_order=False)
+# #p.c[1,0,1,1] = -29
+# #p.c[0,0,0,1] = 8
+# n=3
+# m=3
+# for i in range(m):
+# 		for k in range(n):
+# 			for j in range(m):
+# 				for l in range(n):
+# 					print(str(p.c[i,k,j,l]) + " ",end="")
+# 			print()
+# #print(p.c)
+# #p.reorder(take_max=False, flip_order=False)
+# #print("\n\n\n")
+# print(p.c)
+# print(solve_model(qsap_glovers(p, constraints="sub2")[0]))
