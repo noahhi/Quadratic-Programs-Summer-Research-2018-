@@ -4,6 +4,11 @@ from timeit import default_timer as timer
 from docplex.mp.model import Model
 
 def standard_linearization(quad, lhs_constraints=False, **kwargs):
+	"""
+	Apply the standard linearization to a QP and return resulting model
+
+	param lhs_constraints: can choose to include optional lower bound constraints (or upper bound if mixed_sign)
+	"""
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -54,6 +59,9 @@ def standard_linearization(quad, lhs_constraints=False, **kwargs):
 	return [m, 0]
 
 def glovers_linearization(quad, bounds="tight", constraints="original", lhs_constraints=False, use_diagonal=False, **kwargs):
+	"""
+	Apply glovers linearization to a QP and return resulting model
+	"""
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -285,6 +293,10 @@ def glovers_linearization_prlt(quad, **kwargs):
 	return [new_m, setup_time]
 
 def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kwargs):
+	"""
+	Model and solve the rlt-linarization of the QP, then use resulting duals to obtain optimal split for
+	objective coefficients; model resulting QP with glovers
+	"""
 	def rlt1_linearization(quad):
 		n = quad.n
 		c = quad.c
@@ -519,6 +531,9 @@ def glovers_linearization_rlt(quad, bounds="tight", constraints="original", **kw
 	return [m,setup_time]
 
 def extended_linear_formulation(quad, **kwargs):
+	"""
+	Apply the extended linear formulation to a QP and return resulting model
+	"""
 	n = quad.n
 	c = quad.c
 	C = quad.C
@@ -631,6 +646,9 @@ def ss_linear_formulation(quad, **kwargs):
 	return [m, setup_time]
 
 def qsap_standard(qsap, lhs_constraints=False, **kwargs):
+	"""
+	standard linearization for the quadratic semi-assignment problem
+	"""
 	n = qsap.n
 	m = qsap.m
 	e = qsap.e
@@ -679,6 +697,9 @@ def qsap_standard(qsap, lhs_constraints=False, **kwargs):
 	return [mdl, 0]
 
 def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, **kwargs):
+	"""
+	glovers linearization for the quadratic semi-assignment problem
+	"""
 	n = qsap.n
 	m = qsap.m
 	e = qsap.e
@@ -799,6 +820,9 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	return [mdl,setup_time]
 
 def qsap_elf(qsap, **kwargs):
+	"""
+	extended linear formulation for the quadratic semi-assignment problem
+	"""
 	n = qsap.n
 	m = qsap.m
 	e = qsap.e
@@ -838,7 +862,7 @@ def qsap_elf(qsap, **kwargs):
 
 def qsap_ss(qsap, **kwargs):
 	"""
-	Sherali-Smith Linear Formulation
+	Sherali-Smith Linear Formulation for the quadratic semi-assignment problem
 	"""
 	n = qsap.n
 	m = qsap.m
@@ -889,6 +913,9 @@ def qsap_ss(qsap, **kwargs):
 	return [mdl, setup_time]
 
 def no_linearization(quad, **kwargs):
+	"""
+	Solve a problem using the solver's default approach to quadratics (for cplex, this is the std linearization)
+	"""
 	n = quad.n
 	c = quad.c
 	m = Model(name='no_linearization')
@@ -914,6 +941,11 @@ def no_linearization(quad, **kwargs):
 	return [m, 0]
 
 def solve_model(model, solve_relax=True, time_limit=3600, **kwargs):
+	"""
+	Solve a binary, linearized model of a QP, and its continuous relaxation
+
+	returns a dictionary containing solve time, integer and relaxed solutions
+	"""
 	#use with block to automatically call m.end() when finished
 	with model as m:
 		hit_time_limit = False
