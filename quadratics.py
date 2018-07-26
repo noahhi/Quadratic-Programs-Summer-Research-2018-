@@ -169,6 +169,132 @@ def glovers_linearization(quad, bounds="tight", constraints="original", lhs_cons
 	# return model
 	return [m, setup_time]
 
+def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, solve_continuous=False, **kwargs):
+	"""
+	glovers linearization for the quadratic semi-assignment problem
+	"""
+	n = qsap.n
+	m = qsap.m
+	e = qsap.e
+	c = qsap.c
+	mdl = Model(name='qsap_glovers')
+	if solve_continuous:
+		x = mdl.continuous_var_matrix(keys1=m,keys2=n,name="decision_var")
+	else:
+		x = mdl.binary_var_matrix(keys1=m,keys2=n,name="binary_var")
+	mdl.add_constraints((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+	#let cplex solve w/ quadratic objective function
+	# mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+	# 			+ sum(sum(sum(sum(c[i,k,j,l]*x[i,k]*x[j,l] for l in range(n))for k in range(n))
+	# 			for j in range(1+i,m)) for i in range(m-1)))
+	# mdl.solve()
+	# mdl.print_solution()
+
+
+	U1 = np.zeros((m,n))
+	L0 = np.zeros((m,n))
+	U0 = np.zeros((m,n))
+	L1 = np.zeros((m,n))
+	start = timer()
+	if bounds=="original":
+		for i in range(m):
+			for k in range(n):
+				col = c[i,k,:,:]
+				pos_take_vals = col > 0
+				pos_take_vals[i,k] = True
+				U1[i,k] = np.sum(col[pos_take_vals])
+				neg_take_vals = col < 0
+				neg_take_vals[i,k] = False
+				L0[i,k] = np.sum(col[neg_take_vals])
+				if lhs_constraints:
+					# pos_take_vals[i,k] = False
+					# U0[i,k] = np.sum(col[pos_take_vals])
+					# neg_take_vals[i,k] = True
+					# L1[i,k] = np.sum(col[neg_take_vals])
+					# This should be equivalent but more efficient
+					U0[i,k] = U1[i,k] - col[i,k]
+					L1[i,k] = L0[i,k] + col[i,k]
+	elif bounds=="tight" or bounds=="tighter":
+		bound_mdl = Model(name="u_bound_m")
+		if bounds=="tight":
+			bound_x = bound_mdl.continuous_var_matrix(keys1=m,keys2=n,ub=1,lb=0)
+		elif bounds == "tighter":
+			bound_x = bound_mdl.binary_var_matrix(keys1=m,keys2=n)
+		bound_mdl.add_constraints((sum(bound_x[i,k] for k in range(n)) == 1) for i in range(m))
+		for i in range(m):
+			for k in range(n):
+				# solve for upper bound U1
+				bound_mdl.set_objective(sense="max", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
+				u_con = bound_mdl.add_constraint(bound_x[i,k]==1)
+				bound_mdl.solve()
+				bound_mdl.remove_constraint(u_con)
+				U1[i,k] = bound_mdl.objective_value
+
+				# solve for lower bound L0
+				bound_mdl.set_objective(sense="min", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
+				l_con = bound_mdl.add_constraint(bound_x[i,k]==0)
+				bound_mdl.solve()
+				bound_mdl.remove_constraint(l_con)
+				L0[i,k] = bound_mdl.objective_value
+
+				if lhs_constraints:
+					# solve for upper bound U0
+					bound_mdl.set_objective(sense="max", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
+					u_con = bound_mdl.add_constraint(bound_x[i,k] == 0)
+					bound_mdl.solve()
+					bound_mdl.remove_constraint(u_con)
+					U0[i,k] = bound_mdl.objective_value
+
+					# solve for lower bound L1
+					bound_mdl.set_objective(sense="min", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
+					l_con = bound_mdl.add_constraint(bound_x[i,k] == 1)
+					bound_mdl.solve()
+					L1[i,k] = bound_mdl.objective_value
+					bound_mdl.remove_constraint(l_con)
+		# end bound model
+		bound_mdl.end()
+	else:
+		raise Exception(bounds + " is not a valid bound type for glovers")
+	end = timer()
+	setup_time = end-start
+
+	# for i in range(m):
+	# 	for j in range(n):
+	# 		U1[i,j] = 1000
+	# 		L0[i,j] = -1000
+
+	#add auxiliary constrains
+	if constraints=="original": #TODO make sure symmetric works everywhere
+		z = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=-mdl.infinity)
+		mdl.add_constraints(z[i,k] <= x[i,k]*U1[i,k] for i in range(m) for k in range(n))
+		mdl.add_constraints(z[i,k] <= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+										-L0[i,k]*(1-x[i,k]) for i in range(m) for k in range(n))
+		if lhs_constraints:
+			mdl.add_constraints(z[i,k] >= x[i,k]*L1[i,k] for i in range(m) for k in range(n))
+			mdl.add_constraints(z[i,k] >= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+										-U0[i,k]*(1-x[i,k]) for i in range(m) for k in range(n))
+		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+					+ sum(sum(z[i,k] for k in range(n)) for i in range(m)))
+	elif constraints=="sub1":
+		s = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=0)
+		mdl.add_constraints(s[i,k] >= U1[i,k]*x[i,k]+L0[i,k]*(1-x[i,k])-sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+						for k in range(n) for i in range(m))
+		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+					+ sum(sum(U1[i,k]*x[i,k]-s[i,k] for k in range(n)) for i in range(m)))
+	elif constraints=="sub2":
+		s = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=0)
+		mdl.add_constraints(s[i,k] >= -L0[i,k]*(1-x[i,k])-(x[i,k]*U1[i,k])+sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+		 				for k in range(n) for i in range(m))
+		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
+					+ sum(sum(-s[i,k]-(L0[i,k]*(1-x[i,k])) + sum(sum(c[i,k,j,l]*x[j,l] for l in range(n))
+					for j in range(m)) for k in range(n)) for i in range(m)))
+	else:
+		raise Exception(constraints + " is not a valid constraint type for glovers")
+
+	#return model
+	return [mdl,setup_time]
+
 
 class Quadratic:  # base class for all quadratic problem types
 	def __init__(self, seed_=0, n_=10, m_=1, density_=100, symmetric_=False, k_item_=False):
@@ -430,20 +556,24 @@ class QSAP:	 # quadratic semi assignment problem
 							self.c[i, k, j, l] = self.c[i, k, j, l]*0.5
 							self.c[j, l, i, k] = self.c[i, k, j, l]
 
-	def reorder(self, take_max=False, flip_order=False):
+	def reorder(self, take_max=False, flip_order=False, vm=None):
 		#C = self.c
 		n = self.n
 		m = self.m
 		e = self.e
-		# generate value matrix. a symmetric copy of quadratic terms matrix (all positive)
-		value_matrix = np.zeros(shape=(m, n, m, n))
-		for i in range(m-1):
-			for k in range(n):
-				for j in range(i+1, m):
-					for l in range(n):
-						val = self.c[i, k, j, l]
-						value_matrix[i, k, j, l] = abs(val)
-						value_matrix[j, l, i, k] = abs(val)
+		if type(vm) != np.ndarray:
+			# generate value matrix. a symmetric copy of quadratic terms matrix (all positive)
+			value_matrix = np.zeros(shape=(m, n, m, n))
+			for i in range(m-1):
+				for k in range(n):
+					for j in range(i+1, m):
+						for l in range(n):
+							val = self.c[i, k, j, l]
+							value_matrix[i, k, j, l] = abs(val)
+							value_matrix[j, l, i, k] = abs(val)
+		else:
+			value_matrix=vm
+
 		#print(value_matrix)
 		col_sums = np.zeros((m, n))
 		old_order = []
@@ -479,16 +609,12 @@ class QSAP:	 # quadratic semi assignment problem
 				for k in range(n):
 					# update other terms according to paper
 					col_sums[i, k] -= value_matrix[i, k, mindex[0], mindex[1]]
-		#print(old_order)
-		print(new_order)
 
 		if flip_order:
 			new_order.reverse()
 
 		for i in range(n*m):
 			map[old_order[i]] = new_order[i]
-		#print("\n\n")
-		#print(map)
 
 		C = np.zeros((m,n,m,n))
 		for (x,y) in new_order:
@@ -521,21 +647,24 @@ class QSAP:	 # quadratic semi assignment problem
 
 	def reorder_refined(self, k, take_max=False, flip_order=False):
 		n = self.n
+		m = self.m
 
 		# start by applying the original reorder method
 		self.reorder(take_max=take_max, flip_order=flip_order)
 
 		for iter in range(k):
 			# model and solve continuous relax
-			m = glovers_linearization(
-				self, solve_continuous=True)[0]
-			m.solve()
-			value_matrix = np.zeros((n, n))
-			for i in range(n-1):
-				for j in range(i+1, n):
-					value_matrix[i, j] = self.C[i, j]*m.get_var_by_name("decision_var_"+str(
-						i)).solution_value*m.get_var_by_name("decision_var_"+str(j)).solution_value
-					if self.C[i, j] < 0:
-						value_matrix[i, j] = value_matrix[i, j]*-1
-					value_matrix[j, i] = value_matrix[i, j]
+			mdl = qsap_glovers(self, solve_continuous=True)[0]
+			mdl.solve()
+			#print(mdl.solution)
+			value_matrix = np.zeros(shape=(m, n, m, n))
+			for i in range(m-1):
+				for k in range(n):
+					for j in range(i+1, m):
+						for l in range(n):
+							value_matrix[i,k,j,l] = self.c[i,k,j,l]*mdl.get_var_by_name("decision_var_"+str(
+								i)+"_"+str(k)).solution_value*mdl.get_var_by_name("decision_var_"+str(j)+"_"+str(l)).solution_value
+							if self.c[i,k,j,l] < 0:
+								value_matrix[i,k,j,l] = value_matrix[i,k,j,l]*-1
+							value_matrix[j,l,i,k] = value_matrix[j,l,i,k]
 			self.reorder(vm=value_matrix, take_max=take_max, flip_order=flip_order)
