@@ -774,7 +774,6 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	end = timer()
 	setup_time = end-start
 
-	constraints = "sub2"
 	#add auxiliary constrains
 	if constraints=="original":
 		z = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=-mdl.infinity)
@@ -789,7 +788,7 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	elif constraints=="sub1":
 		s = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=0)
 		mdl.add_constraints(s[j,l] >= U1[j,l]*x[j,l]+L0[j,l]*(1-x[j,l])-sum(c[i,k,j,l]*x[i,k] for i in range(m) for k in range(n) if i != j)
-						for k in range(n) for i in range(m))
+						for l in range(n) for j in range(m))
 		mdl.maximize(sum(e[i,k]*x[i,k] for k in range(n) for i in range(m))
 					+ sum(U1[i,k]*x[i,k]-s[i,k] for k in range(n) for i in range(m)))
 	elif constraints=="sub2":

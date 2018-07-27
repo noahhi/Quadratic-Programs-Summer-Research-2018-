@@ -11,7 +11,6 @@ TIME_LIMIT = 3600
 DATAFRAME_NAME = "test"
 NUM_TRIALS = 10
 
-#TODO reorder should be false by default
 def run_trials(data_, solver="cplex",type="QKP",symmetric=False,reorder_info={"reorder":False},
 			method="std",size=5,multiple=1,den=100, options=0,glover_bounds="tight", glover_cons="original",mixed_sign=False):
 	"""
@@ -217,12 +216,13 @@ if __name__=="__main__":
 	METHODS = ["standard", "glovers", "glovers_rlt", "elf", "sslf"] # 'method' = {"standard", "glovers", "glovers_rlt", "elf", "sslf"}
 	BOUNDS = ["original", "tight", "tighter"] # 'glover_bounds' = {"original", "tight", "tighter"}
 	CONSTRAINTS = ["original", "sub1", "sub2"] # 'glovers_cons' = {"original", "sub1", "sub2"}
-	OPTIONS = [0,1,2,3,4] # 'options' = {0-4} ~Used for reordering; or other misc things
+	OPTIONS = [0] # 'options' = {0-4} ~Used for reordering; or other misc things
 	MULTIPLE = [1, 5, 10] # 'multiple' = {1-10} ~only does anything for QKP; adds multiple Knapsack Constraints
 	SIZES = [30]
 	DENSITIES = [100]
 	REORDER = [{"reorder":True, "refined":True, "k":5, "alpha":0.3, "take_max":False, "flip_order":False},
 				{"reorder":True, "refined":True, "k":10, "alpha":0.3, "take_max":False, "flip_order":False}]
+				#set "reorder":False to not do any reordering
 
 	for solver in SOLVERS:
 		for size in SIZES:

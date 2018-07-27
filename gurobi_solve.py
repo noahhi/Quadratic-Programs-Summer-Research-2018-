@@ -728,23 +728,23 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	L1 = np.zeros((m,n))
 	start = timer()
 	if bounds=="original":
-		for i in range(m):
-			for k in range(n):
-				col = c[i,k,:,:]
+		for j in range(m):
+			for l in range(n):
+				col = c[:,:,j,l]
 				pos_take_vals = col > 0
-				pos_take_vals[i,k] = True
-				U1[i,k] = np.sum(col[pos_take_vals])
+				pos_take_vals[j,l] = True
+				U1[j,l] = np.sum(col[pos_take_vals])
 				neg_take_vals = col < 0
-				neg_take_vals[i,k] = False
-				L0[i,k] = np.sum(col[neg_take_vals])
+				neg_take_vals[j,l] = False
+				L0[j,l] = np.sum(col[neg_take_vals])
 				if lhs_constraints:
 					# pos_take_vals[i,k] = False
 					# U0[i,k] = np.sum(col[pos_take_vals])
 					# neg_take_vals[i,k] = True
 					# L1[i,k] = np.sum(col[neg_take_vals])
 					# This should be equivalent but more efficient
-					U0[i,k] = U1[i,k] - col[i,k]
-					L1[i,k] = L0[i,k] + col[i,k]
+					U0[j,l] = U1[j,l] - col[j,l]
+					L1[j,l] = L0[j,l] + col[j,l]
 	elif bounds=="tight" or bounds=="tighter":
 		bound_mdl = Model(name="bound_m")
 		if bounds=="tight":
@@ -752,66 +752,68 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 		elif bounds == "tighter":
 			bound_x = bound_mdl.addVars(m,n, vtype=GRB.BINARY)
 		bound_mdl.addConstrs((quicksum(bound_x[i,k] for k in range(n)) == 1) for i in range(m))
-		for i in range(m):
-			for k in range(n):
+		for j in range(m):
+			for l in range(n):
 				# solve for upper bound U1
-				bound_mdl.setObjective(quicksum(quicksum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)), GRB.MAXIMIZE)
-				u_con = bound_mdl.addConstr(bound_x[i,k]==1)
+				bound_mdl.setObjective(sum(c[i,k,j,l]*bound_x[i,k] for i in range(m) for k in range(n) if i != j), GRB.MAXIMIZE)
+				u_con = bound_mdl.addConstr(bound_x[j,l]==1)
 				bound_mdl.optimize()
 				bound_mdl.remove(u_con)
-				U1[i,k] = bound_mdl.objVal
+				U1[j,l] = bound_mdl.objVal
 
 				# solve for lower bound L0
-				bound_mdl.setObjective(quicksum(quicksum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)), GRB.MINIMIZE)
-				l_con = bound_mdl.addConstr(bound_x[i,k]==0)
+				bound_mdl.setObjective(sum(c[i,k,j,l]*bound_x[i,k] for i in range(m) for k in range(n) if i != j), GRB.MINIMIZE)
+				l_con = bound_mdl.addConstr(bound_x[j,l]==0)
 				bound_mdl.optimize()
 				bound_mdl.remove(l_con)
-				L0[i,k] = bound_mdl.objVal
+				L0[j,l] = bound_mdl.objVal
 
 				if lhs_constraints:
 					# solve for upper bound U0
-					bound_mdl.setObjective(quicksum(quicksum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)), GRB.MAXIMIZE)
-					u_con = bound_mdl.addConstr(bound_x[i,k] == 0)
+					bound_mdl.setObjective(sum(c[i,k,j,l]*bound_x[i,k] for i in range(m) for k in range(n) if i != j), GRB.MAXIMIZE)
+					u_con = bound_mdl.addConstr(bound_x[j,l] == 0)
 					bound_mdl.optimize()
 					bound_mdl.remove(u_con)
-					U0[i,k] = bound_mdl.objVal
+					U0[j,l] = bound_mdl.objVal
 
 					# solve for lower bound L1
-					bound_mdl.setObjective(quicksum(quicksum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)), GRB.MINIMIZE)
-					l_con = bound_mdl.addConstr(bound_x[i,k] == 1)
+					bound_mdl.setObjective(sum(c[i,k,j,l]*bound_x[i,k] for i in range(m) for k in range(n) if i != j), GRB.MINIMIZE)
+					l_con = bound_mdl.addConstr(bound_x[j,l] == 1)
 					bound_mdl.optimize()
-					L1[i,k] = bound_mdl.objVal
+					L1[j,l] = bound_mdl.objVal
 					bound_mdl.remove(l_con)
 		# end bound model
 		bound_mdl.terminate()
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
 
+
+
 	#add auxiliary constrains
 	if constraints=="original":
 		z = mdl.addVars(m,n,lb=-GRB.INFINITY, vtype=GRB.CONTINUOUS)
-		mdl.addConstrs(z[i,k] <= x[i,k]*U1[i,k] for i in range(m) for k in range(n))
-		mdl.addConstrs(z[i,k] <= quicksum(quicksum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
-										-L0[i,k]*(1-x[i,k]) for i in range(m) for k in range(n))
+		mdl.addConstrs(z[j,l] <= x[j,l]*U1[j,l] for j in range(m) for l in range(n))
+		mdl.addConstrs(z[j,l] <= sum(c[i,k,j,l]*x[i,k] for i in range(m) for k in range(n) if i != j)-L0[j,l]*(1-x[j,l]) for j in range(m) for l in range(n))
 		if lhs_constraints:
-			mdl.addConstrs(z[i,k] >= x[i,k]*L1[i,k] for i in range(m) for k in range(n))
-			mdl.addConstrs(z[i,k] >= quicksum(quicksum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
-										-U0[i,k]*(1-x[i,k]) for i in range(m) for k in range(n))
-		mdl.setObjective(quicksum(quicksum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
-					+ quicksum(quicksum(z[i,k] for k in range(n)) for i in range(m)), GRB.MAXIMIZE)
+			mdl.addConstrs(z[j,l] >= x[j,l]*L1[j,l] for i in range(m) for k in range(n))
+			mdl.addConstrs(z[j,l] >= sum(sum(c[i,k,j,l]*x[i,k] for l in range(n)) for j in range(m))
+										-U0[j,l]*(1-x[j,l]) for i in range(m) for k in range(n))
+
+		mdl.setObjective(sum(sum(e[i,k]*x[i,k] + z[i,k] for k in range(n)) for i in range(m)), GRB.MAXIMIZE)
 	elif constraints=="sub1":
 		s = mdl.addVars(m,n,lb=0)
-		mdl.addConstrs(s[i,k] >= U1[i,k]*x[i,k]+L0[i,k]*(1-x[i,k])-quicksum(quicksum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
-						for k in range(n) for i in range(m))
-		mdl.setObjective(quicksum(quicksum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
-					+ quicksum(quicksum(U1[i,k]*x[i,k]-s[i,k] for k in range(n)) for i in range(m)), GRB.MAXIMIZE)
+		mdl.addConstrs(s[j,l] >= U1[j,l]*x[j,l]+L0[j,l]*(1-x[j,l])-sum(c[i,k,j,l]*x[i,k] for i in range(m)
+			for k in range(n) if i != j) for l in range(n) for j in range(m))
+		mdl.setObjective(sum(e[i,k]*x[i,k] for k in range(n) for i in range(m)) + sum(U1[i,k]*x[i,k]-s[i,k]
+			for k in range(n) for i in range(m)), GRB.MAXIMIZE)
 	elif constraints=="sub2":
 		s = mdl.addVars(m,n,lb=0)
-		mdl.addConstrs(s[i,k] >= -L0[i,k]*(1-x[i,k])-(x[i,k]*U1[i,k])+quicksum(quicksum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
-		 				for k in range(n) for i in range(m))
-		mdl.setObjective(quicksum(quicksum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
-					+ quicksum(quicksum(-s[i,k]-(L0[i,k]*(1-x[i,k])) + quicksum(quicksum(c[i,k,j,l]*x[j,l] for l in range(n))
-					for j in range(m)) for k in range(n)) for i in range(m)), GRB.MAXIMIZE)
+		mdl.addConstrs(s[j,l] >= -L0[j,l]*(1-x[j,l])-(x[j,l]*U1[j,l])+sum(c[i,k,j,l]*x[i,k] for i in range(m) for k in range(n) if i != j)
+		 				for j in range(m) for l in range(n))
+
+		mdl.setObjective(sum(sum(e[j,l]*x[j,l] for l in range(n))for j in range(m))
+					+ sum(sum(-s[j,l]-(L0[j,l]*(1-x[j,l])) + sum(sum(c[i,k,j,l]*x[i,k] for k in range(n))
+					for i in range(m)) for l in range(n)) for j in range(m)), GRB.MAXIMIZE)
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
@@ -951,6 +953,8 @@ def solve_model(m, solve_relax=True, time_limit=3600, **kwargs):
 	Takes in an unsolved gurobi model of a MIP. Solves it as well as continuous
 	relaxation and returns a dictionary containing relevant solve details
 	"""
+	#NOTE this function terminates the model
+	
 	# turn off model output. otherwise prints bunch of info, clogs console
 	#m.setParam('OutputFlag', 0)
 	hit_time_limit = False

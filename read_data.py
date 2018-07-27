@@ -187,7 +187,7 @@ def analyze(df_name, new_folder_name, test_variable, formulations, specification
 	#mask = df["instance_total_time"] > 600	# ~where 600 was timelimit
 	#df.loc[mask, "instance_total_time"] = np.nan
 
-	df = df[:-5]	 #--use this to cut off (5) rows from end if uneven length
+	#df = df[:-5]	 #--use this to cut off (5) rows from end if uneven length
 	#df = df[df["density"]==50]
 
 	# Create a new data folder, while making sure to not overwrite existing data
@@ -276,15 +276,15 @@ look_at: (y axis for graph) ~ {'instance_total_time', 'instance_gap'}
  (could also look at instance_setup_time, or instance_solve_time not including setup)
 """
 
-#specs = {"density":[25,50,75,100], "type":["QKP", "KQKP"]}
-#analyze(df_name='test', new_folder_name='refined_reorder', specifications=specs,
-#   test_variable="options", formulations=[0,5,6,7,8], look_at="instance_total_time")
+# specs = {"density":[25,50,75,100], "type":["QKP", "KQKP"]}
+# analyze(df_name='batch1', new_folder_name='test10', specifications=specs,
+#   test_variable="symmetric", formulations=[True,False], look_at="instance_total_time")
 
-df = pd.read_pickle("dataframes/{}.pkl".format("test"))
-write_report(df=df,save_loc="reports/")
+# df = pd.read_pickle("dataframes/{}.pkl".format("test"))
+# write_report(df=df,save_loc="reports/")
 
-# df = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_smaller"))
-# df2 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder"))
-# df3 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_bigger"))
-# make_line_graph([df2], save_loc="", variable="options",
-#				  formulations=[0, 1, 2, 3, 4])
+df = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_smaller"))
+df2 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder"))
+df3 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_bigger"))
+make_line_graph([df2], save_loc="", variable="options",
+				  formulations=[0, 1, 2, 3, 4])
