@@ -1,6 +1,5 @@
-#ignore data 
-data/
-dataframes/
+#ignore data
+
 
 #ignore log files
 log/
