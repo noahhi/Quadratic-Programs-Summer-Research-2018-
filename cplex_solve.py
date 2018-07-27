@@ -33,7 +33,8 @@ def standard_linearization(quad, lhs_constraints=False, **kwargs):
 	for i in range(n):
 		for j in range(i+1,n):
 			if lhs_constraints:
-				if C[i,j] > 0:
+				#TODO would be moe clear to call this sign-dependent-cons
+				if C[i,j]+C[j,i] > 0:
 					m.add_constraint(w[i,j] <= x[i])
 					m.add_constraint(w[i,j] <= x[j])
 				else:
@@ -645,7 +646,7 @@ def ss_linear_formulation(quad, **kwargs):
 	#return model + setup time
 	return [m, setup_time]
 
-def qsap_standard(qsap, lhs_constraints=True, **kwargs):
+def qsap_standard(qsap, lhs_constraints=False, **kwargs):
 	"""
 	standard linearization for the quadratic semi-assignment problem
 	"""
@@ -668,25 +669,26 @@ def qsap_standard(qsap, lhs_constraints=True, **kwargs):
 			for j in range(i+1,m):
 				for l in range(n):
 					if lhs_constraints:
-						mdl.add_constraint(w[i,k,j,l] <= x[i,k])
-						mdl.add_constraint(w[i,k,j,l] <= x[j,l])
-						mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
-						mdl.add_constraint(w[i,k,j,l] >= 0)
-					else:
-						if c[i,k,j,l] > 0:
+						if c[i,k,j,l]+c[j,l,i,k] > 0:
 							mdl.add_constraint(w[i,k,j,l] <= x[i,k])
 							mdl.add_constraint(w[i,k,j,l] <= x[j,l])
 						else:
 							mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
 							mdl.add_constraint(w[i,k,j,l] >= 0)
+					else:
+						mdl.add_constraint(w[i,k,j,l] <= x[i,k])
+						mdl.add_constraint(w[i,k,j,l] <= x[j,l])
+						mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+						mdl.add_constraint(w[i,k,j,l] >= 0)
 
 
+	#TODO make sure this works w/ lhs, mixed sign and non ut
 
 	#compute quadratic values contirbution to obj
 	quadratic_values = 0
 	for i in range(m-1):
-		for j in range(i+1,m):
-			for k in range(n):
+		for k in range(n):
+			for j in range(i+1,m):
 				for l in range(n):
 					quadratic_values = quadratic_values + ((c[i,k,j,l]+c[j,l,i,k])*(w[i,k,j,l]))
 
@@ -697,9 +699,6 @@ def qsap_standard(qsap, lhs_constraints=True, **kwargs):
 	return [mdl, 0]
 
 def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraints=False, **kwargs):
-	"""
-	glovers linearization for the quadratic semi-assignment problem
-	"""
 	n = qsap.n
 	m = qsap.m
 	e = qsap.e
@@ -708,71 +707,62 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 	x = mdl.binary_var_matrix(keys1=m,keys2=n,name="binary_var")
 	mdl.add_constraints((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
 
-	#let cplex solve w/ quadratic objective function
-	# mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
-	# 			+ sum(sum(sum(sum(c[i,k,j,l]*x[i,k]*x[j,l] for l in range(n))for k in range(n))
-	# 			for j in range(1+i,m)) for i in range(m-1)))
-	# mdl.solve()
-	# mdl.print_solution()
-
-
 	U1 = np.zeros((m,n))
 	L0 = np.zeros((m,n))
 	U0 = np.zeros((m,n))
 	L1 = np.zeros((m,n))
 	start = timer()
+
 	if bounds=="original":
-		for i in range(m):
-			for k in range(n):
-				col = c[i,k,:,:]
+		for j in range(m):
+			for l in range(n):
+				col = c[:,:,j,l]
 				pos_take_vals = col > 0
-				pos_take_vals[i,k] = True
-				U1[i,k] = np.sum(col[pos_take_vals])
+				pos_take_vals[j,l] = True
+				U1[j,l] = np.sum(col[pos_take_vals])
 				neg_take_vals = col < 0
-				neg_take_vals[i,k] = False
-				L0[i,k] = np.sum(col[neg_take_vals])
+				neg_take_vals[j,l] = False
+				L0[j,l] = np.sum(col[neg_take_vals])
 				if lhs_constraints:
-					# pos_take_vals[i,k] = False
-					# U0[i,k] = np.sum(col[pos_take_vals])
-					# neg_take_vals[i,k] = True
-					# L1[i,k] = np.sum(col[neg_take_vals])
-					# This should be equivalent but more efficient
-					U0[i,k] = U1[i,k] - col[i,k]
-					L1[i,k] = L0[i,k] + col[i,k]
+					U0[j,l] = U1[j,l] - col[j,l]
+					L1[j,l] = L0[j,l] + col[j,l]
 	elif bounds=="tight" or bounds=="tighter":
 		bound_mdl = Model(name="u_bound_m")
+
 		if bounds=="tight":
 			bound_x = bound_mdl.continuous_var_matrix(keys1=m,keys2=n,ub=1,lb=0)
 		elif bounds == "tighter":
 			bound_x = bound_mdl.binary_var_matrix(keys1=m,keys2=n)
+
 		bound_mdl.add_constraints((sum(bound_x[i,k] for k in range(n)) == 1) for i in range(m))
-		for i in range(m):
-			for k in range(n):
+
+		for j in range(m):
+			for l in range(n):
 				# solve for upper bound U1
-				bound_mdl.set_objective(sense="max", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
-				u_con = bound_mdl.add_constraint(bound_x[i,k]==1)
+				bound_mdl.set_objective(sense="max", expr=sum(c[i,k,j,l]*bound_x[i,k] for i in range(m) for k in range(n) if i != j))
+				u_con = bound_mdl.add_constraint(bound_x[j,l]==1)
 				bound_mdl.solve()
+				U1[j,l] = bound_mdl.objective_value
 				bound_mdl.remove_constraint(u_con)
-				U1[i,k] = bound_mdl.objective_value
 
 				# solve for lower bound L0
-				bound_mdl.set_objective(sense="min", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
-				l_con = bound_mdl.add_constraint(bound_x[i,k]==0)
+				bound_mdl.set_objective(sense="min", expr=sum(c[i,k,j,l]*bound_x[i,k] for i in range(m) for k in range(n) if i != j))
+				l_con = bound_mdl.add_constraint(bound_x[j,l]==0)
 				bound_mdl.solve()
+				L0[j,l] = bound_mdl.objective_value
 				bound_mdl.remove_constraint(l_con)
-				L0[i,k] = bound_mdl.objective_value
 
 				if lhs_constraints:
 					# solve for upper bound U0
-					bound_mdl.set_objective(sense="max", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
-					u_con = bound_mdl.add_constraint(bound_x[i,k] == 0)
+					bound_mdl.set_objective(sense="max", expr=sum(c[i,k,j,l]*bound_x[i,k] for i in range(m) for k in range(n) if i != j))
+					u_con = bound_mdl.add_constraint(bound_x[j,l] == 0)
 					bound_mdl.solve()
 					bound_mdl.remove_constraint(u_con)
 					U0[i,k] = bound_mdl.objective_value
 
 					# solve for lower bound L1
-					bound_mdl.set_objective(sense="min", expr=sum(sum(c[i,k,j,l]*bound_x[j,l] for l in range(n)) for j in range(m)))
-					l_con = bound_mdl.add_constraint(bound_x[i,k] == 1)
+					bound_mdl.set_objective(sense="min", expr=sum(c[i,k,j,l]*bound_x[i,k] for i in range(m) for k in range(n) if i != j))
+					l_con = bound_mdl.add_constraint(bound_x[j,l] == 1)
 					bound_mdl.solve()
 					L1[i,k] = bound_mdl.objective_value
 					bound_mdl.remove_constraint(l_con)
@@ -780,44 +770,117 @@ def qsap_glovers(qsap, bounds="original", constraints="original", lhs_constraint
 		bound_mdl.end()
 	else:
 		raise Exception(bounds + " is not a valid bound type for glovers")
+
 	end = timer()
 	setup_time = end-start
 
-	# for i in range(m):
-	# 	for j in range(n):
-	# 		U1[i,j] = 1000
-	# 		L0[i,j] = -1000
-
+	constraints = "sub2"
 	#add auxiliary constrains
-	if constraints=="original": #TODO make sure symmetric works everywhere
+	if constraints=="original":
 		z = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=-mdl.infinity)
-		mdl.add_constraints(z[i,k] <= x[i,k]*U1[i,k] for i in range(m) for k in range(n))
-		mdl.add_constraints(z[i,k] <= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
-										-L0[i,k]*(1-x[i,k]) for i in range(m) for k in range(n))
+		mdl.add_constraints(z[j,l] <= x[j,l]*U1[j,l] for j in range(m) for l in range(n))
+		mdl.add_constraints(z[j,l] <= sum(c[i,k,j,l]*x[i,k] for i in range(m) for k in range(n) if i != j)-L0[j,l]*(1-x[j,l]) for j in range(m) for l in range(n))
 		if lhs_constraints:
-			mdl.add_constraints(z[i,k] >= x[i,k]*L1[i,k] for i in range(m) for k in range(n))
-			mdl.add_constraints(z[i,k] >= sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
-										-U0[i,k]*(1-x[i,k]) for i in range(m) for k in range(n))
-		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
-					+ sum(sum(z[i,k] for k in range(n)) for i in range(m)))
+			mdl.add_constraints(z[j,l] >= x[j,l]*L1[j,l] for i in range(m) for k in range(n))
+			mdl.add_constraints(z[j,l] >= sum(sum(c[i,k,j,l]*x[i,k] for l in range(n)) for j in range(m))
+										-U0[j,l]*(1-x[j,l]) for i in range(m) for k in range(n))
+
+		mdl.maximize(sum(sum(e[i,k]*x[i,k] + z[i,k] for k in range(n)) for i in range(m)))
 	elif constraints=="sub1":
 		s = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=0)
-		mdl.add_constraints(s[i,k] >= U1[i,k]*x[i,k]+L0[i,k]*(1-x[i,k])-sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
+		mdl.add_constraints(s[j,l] >= U1[j,l]*x[j,l]+L0[j,l]*(1-x[j,l])-sum(c[i,k,j,l]*x[i,k] for i in range(m) for k in range(n) if i != j)
 						for k in range(n) for i in range(m))
-		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
-					+ sum(sum(U1[i,k]*x[i,k]-s[i,k] for k in range(n)) for i in range(m)))
+		mdl.maximize(sum(e[i,k]*x[i,k] for k in range(n) for i in range(m))
+					+ sum(U1[i,k]*x[i,k]-s[i,k] for k in range(n) for i in range(m)))
 	elif constraints=="sub2":
 		s = mdl.continuous_var_matrix(keys1=m,keys2=n,lb=0)
-		mdl.add_constraints(s[i,k] >= -L0[i,k]*(1-x[i,k])-(x[i,k]*U1[i,k])+sum(sum(c[i,k,j,l]*x[j,l] for l in range(n)) for j in range(m))
-		 				for k in range(n) for i in range(m))
-		mdl.maximize(sum(sum(e[i,k]*x[i,k] for k in range(n))for i in range(m))
-					+ sum(sum(-s[i,k]-(L0[i,k]*(1-x[i,k])) + sum(sum(c[i,k,j,l]*x[j,l] for l in range(n))
-					for j in range(m)) for k in range(n)) for i in range(m)))
+		mdl.add_constraints(s[j,l] >= -L0[j,l]*(1-x[j,l])-(x[j,l]*U1[j,l])+sum(c[i,k,j,l]*x[i,k] for i in range(m) for k in range(n) if i != j)
+		 				for j in range(m) for l in range(n))
+
+		mdl.maximize(sum(sum(e[j,l]*x[j,l] for l in range(n))for j in range(m))
+					+ sum(sum(-s[j,l]-(L0[j,l]*(1-x[j,l])) + sum(sum(c[i,k,j,l]*x[i,k] for k in range(n))
+					for i in range(m)) for l in range(n)) for j in range(m)))
 	else:
 		raise Exception(constraints + " is not a valid constraint type for glovers")
 
 	#return model
 	return [mdl,setup_time]
+
+def qsap_glover_rlt(qsap, **kwargs):
+	def rlt1_qsap(qsap):
+		n = qsap.n
+		m = qsap.m
+		e = qsap.e
+		c = qsap.c
+
+		#create model and add variables
+		mdl = Model(name='qsap_rlt1_linearization')
+		x = mdl.continuous_var_matrix(m,n,name="binary_var", lb=0, ub=1)
+		w = np.array([[[[mdl.continuous_var() for i in range(n)]for j in range(m)]
+							for k in range(n)]for l in range(m)])
+
+		# Include the original assignment constraints
+		mdl.add_constraints((sum(x[i,k] for k in range(n)) == 1) for i in range(m))
+
+		# Multiply each assignment constraint by each x_jl
+		for j in range(m):
+			for l in range(n):
+				for i in range(m):
+					if i == j:
+						continue
+					mdl.add_constraint(sum(w[i,k,j,l] for k in range(n)) == x[j,l])
+
+		# Add symmetry constraints
+		for i in range(m-1):
+			for k in range(n):
+				for j in range(i+1,m):
+					for l in range(n):
+						const_name = 'sym_' + str(i) + '_' + str(k) + '_' + str(j)+ '_' + str(l)
+						mdl.add_constraint(w[i,k,j,l] == w[j,l,i,k], ctname = const_name)
+
+		# Construct objective value
+		quadratic_values = 0
+		for i in range(m):
+			for j in range(m):
+				for k in range(n):
+					for l in range(n):
+						quadratic_values = quadratic_values + c[i,k,j,l]*w[i,k,j,l]
+
+		linear_values = mdl.sum(x[i,k]*e[i,k] for k in range(n) for i in range(m))
+		mdl.maximize(linear_values + quadratic_values)
+
+		# Return model
+		return mdl
+
+	# Solve the continuous relaxation of the level-1 RLT
+	start = timer()
+	mdl = rlt1_qsap(qsap)
+	mdl.solve()
+
+	print()
+	print("The continuous relaxation of the RLT is " + str(mdl.objective_value))
+	print()
+
+	n = qsap.n
+	m = qsap.m
+
+	# Adjust the objective coefficients using the duals to the symmetry constraints
+	for i in range(m-1):
+		for k in range(n):
+			for j in range(i+1,m):
+				for l in range(n):
+					const_name = 'sym_' + str(i) + '_' + str(k) + '_' + str(j)+ '_' + str(l)
+					dualval = mdl.dual_values(mdl.get_constraint_by_name(const_name))
+					qsap.c[i,k,j,l] -= dualval
+					qsap.c[j,l,i,k] += dualval
+
+	mdl.end()
+	end = timer()
+	setup_time = end-start
+
+	new_m = qsap_glovers(qsap, bounds="tight", constraints="original")[0]
+
+	return [new_m, setup_time]
 
 def qsap_elf(qsap, **kwargs):
 	"""
@@ -953,6 +1016,8 @@ def solve_model(model, solve_relax=True, time_limit=3600, **kwargs):
 		start = timer()
 		m.solve()
 		end = timer()
+		#print(str(m.get_solve_status()))
+		#TODO this should be if "optimal" not in there -> then print solve_status
 		if("FEASIBLE" in str(m.get_solve_status())):
 			print('time limit exceeded')
 			hit_time_limit=True
@@ -996,23 +1061,3 @@ def solve_model(model, solve_relax=True, time_limit=3600, **kwargs):
 				"integrality_gap":integrality_gap,
 				"time_limit":hit_time_limit}
 	return results
-
-
-# p = QSAP(n=3,m=3)
-# print(solve_model(qsap_glovers(p, constraints="original")[0]))
-# p.reorder(take_max=False, flip_order=False)
-# #p.c[1,0,1,1] = -29
-# #p.c[0,0,0,1] = 8
-# n=3
-# m=3
-# for i in range(m):
-# 		for k in range(n):
-# 			for j in range(m):
-# 				for l in range(n):
-# 					print(str(p.c[i,k,j,l]) + " ",end="")
-# 			print()
-# #print(p.c)
-# #p.reorder(take_max=False, flip_order=False)
-# #print("\n\n\n")
-# print(p.c)
-# print(solve_model(qsap_glovers(p, constraints="sub2")[0]))

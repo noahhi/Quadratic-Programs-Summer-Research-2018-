@@ -37,7 +37,7 @@ def standard_linearization(quad, lhs_constraints=True, **kwargs):
 	for i in range(n):
 		for j in range(i+1, n):
 			if lhs_constraints:
-				if C[i,j] > 0:
+				if C[i,j]+C[j,i] > 0:
 					m.addConstr(w[i,j] <= x[i])
 					m.addConstr(w[i,j] <= x[j])
 				else:
@@ -676,17 +676,17 @@ def qsap_standard(qsap, **kwargs):
 			for j in range(i+1,m):
 				for l in range(n):
 					if lhs_constraints:
-						mdl.add_constraint(w[i,k,j,l] <= x[i,k])
-						mdl.add_constraint(w[i,k,j,l] <= x[j,l])
-						mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
-						mdl.add_constraint(w[i,k,j,l] >= 0)
-					else:
-						if c[i,k,j,l] > 0:
+						if c[i,k,j,l]+c[j,l,i,k] > 0:
 							mdl.add_constraint(w[i,k,j,l] <= x[i,k])
 							mdl.add_constraint(w[i,k,j,l] <= x[j,l])
 						else:
 							mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
 							mdl.add_constraint(w[i,k,j,l] >= 0)
+					else:
+						mdl.add_constraint(w[i,k,j,l] <= x[i,k])
+						mdl.add_constraint(w[i,k,j,l] <= x[j,l])
+						mdl.add_constraint(x[i,k] + x[j,l] - 1 <= w[i,k,j,l])
+						mdl.add_constraint(w[i,k,j,l] >= 0)
 
 	#compute quadratic values contirbution to obj
 	quadratic_values = 0

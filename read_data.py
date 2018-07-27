@@ -21,7 +21,7 @@ def write_report(df, save_loc):
 	workbook = writer.book
 	worksheet = writer.sheets['Sheet1']
 	worksheet.conditional_format(
-		'Q2:Q5000', {'type': '3_color_scale', 'min_color': 'green', 'max_color': 'red'})
+		'V2:V5000', {'type': '3_color_scale', 'min_color': 'green', 'max_color': 'red'})
 
 	writer.save()
 
@@ -187,7 +187,7 @@ def analyze(df_name, new_folder_name, test_variable, formulations, specification
 	#mask = df["instance_total_time"] > 600	# ~where 600 was timelimit
 	#df.loc[mask, "instance_total_time"] = np.nan
 
-	# df = df[:-5]	 #--use this to cut off (5) rows from end if uneven length
+	df = df[:-5]	 #--use this to cut off (5) rows from end if uneven length
 	#df = df[df["density"]==50]
 
 	# Create a new data folder, while making sure to not overwrite existing data
@@ -276,9 +276,12 @@ look_at: (y axis for graph) ~ {'instance_total_time', 'instance_gap'}
  (could also look at instance_setup_time, or instance_solve_time not including setup)
 """
 
-specs = {"density":[25,50,75,100], "type":["QKP", "KQKP", "HSP"]}
-analyze(df_name='test', new_folder_name='test1', specifications=specs,
-   test_variable="options", formulations=[5,6,7,8], look_at="instance_total_time")
+#specs = {"density":[25,50,75,100], "type":["QKP", "KQKP"]}
+#analyze(df_name='test', new_folder_name='refined_reorder', specifications=specs,
+#   test_variable="options", formulations=[0,5,6,7,8], look_at="instance_total_time")
+
+df = pd.read_pickle("dataframes/{}.pkl".format("test"))
+write_report(df=df,save_loc="reports/")
 
 # df = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder_smaller"))
 # df2 = pd.read_pickle("dataframes/{}.pkl".format("batch3_reorder"))
